@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@ package lombok.ast;
 public interface DescribedNode extends Node {
 	/**
 	 * A very short string that is particularly useful in describing this node.
-	 * Can always be {@code null} to indicate this particular instance has no useful name (usually, but not neccessarily, because it is not valid).
+	 * Can always be {@code null} to indicate this particular instance has no useful name (usually, but not necessarily, because it is not valid).
 	 * 
 	 * <strong>NB: This method should never throw an exception!</strong>
 	 */
