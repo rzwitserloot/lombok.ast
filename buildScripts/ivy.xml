@@ -5,18 +5,19 @@
 		<conf name="runtime" />
 		<conf name="test" extends="build" />
 		<conf name="contrib" />
+		<conf name="cobertura" />
 	</configurations>
 	<dependencies>
-		<dependency org="com.zwitserloot" name="cmdreader" rev="1.2" conf="build->default; runtime->default" />
-		<dependency org="org.projectlombok" name="lombok" rev="0.10.6" conf="build->default" />
-		<dependency org="org.projectlombok" name="lombok-utils" rev="0.10.6" conf="runtime->default" />
 		<dependency org="com.github.parboiled.custom" name="parboiled" rev="0.9.7.2" conf="build; runtime; contrib->sources" />
-		<dependency org="com.google.guava" name="guava" rev="r09" conf="runtime->default; build->default; contrib->sources" />
+		<dependency org="com.zwitserloot" name="cmdreader" rev="1.2" conf="runtime, build->default" />
+		<dependency org="org.projectlombok" name="lombok" rev="0.10.8" conf="build->default" />
+		<dependency org="org.projectlombok" name="lombok-utils" rev="0.10.8" conf="runtime->default" />
+		<dependency org="com.google.guava" name="guava" rev="r09" conf="runtime, build->default; contrib->sources" />
 		<dependency org="junit" name="junit" rev="4.8.2" conf="test->default" />
 		<dependency org="net.java.openjdk.custom" name="javac6" rev="1.6.0.18" conf="build->default; contrib->sources" />
 		<dependency org="org.eclipse.custom" name="ecj" rev="3.6.2" conf="build->default; contrib->sources" />
-		<dependency org="net.sourceforge.cobertura" name="cobertura" rev="1.9.4.1" conf="test->runtime" />
-		<dependency org="net.sourceforge.cobertura" name="cobertura-runtime" rev="1.9.4.1" conf="test->runtime" />
+		<dependency org="net.sourceforge.cobertura" name="cobertura" rev="1.9.4.1" conf="cobertura->default" />
+		<dependency org="net.sourceforge.cobertura" name="cobertura-runtime" rev="1.9.4.1" conf="cobertura->default" />
 		<dependency org="com.googlecode.jarjar" name="jarjar" rev="1.1" conf="build->default" />
 		<dependency org="com.jcraft" name="jsch" rev="0.1.42" conf="build->default" />
 		<dependency org="projectlombok.org" name="jsch-ant-fixed" rev="0.1.42" conf="build" />
