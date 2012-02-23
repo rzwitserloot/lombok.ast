@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import javax.lang.model.element.ExecutableElement;
+
 import lombok.ast.template.CopyMethod;
 import lombok.ast.template.ForcedType;
 import lombok.ast.template.GenerateAstNode;
@@ -1326,7 +1328,7 @@ class AnnotationMethodDeclarationTemplate {
 	}
 }
 
-@GenerateAstNode(implementing={TypeMember.class, DescribedNode.class, JavadocContainer.class}, mixin=TypeMemberMixin.class)
+@GenerateAstNode(implementing={ExecutableElement.class, DescribedNode.class}, mixin=TypeMemberMixin.class)
 class MethodDeclarationTemplate {
 	Comment javadoc1;
 	
@@ -1345,7 +1347,7 @@ class MethodDeclarationTemplate {
 	}
 }
 
-@GenerateAstNode(implementing={TypeMember.class, JavadocContainer.class}, mixin=TypeMemberMixin.class)
+@GenerateAstNode(implementing=ExecutableDeclaration.class, mixin=TypeMemberMixin.class)
 class ConstructorDeclarationTemplate {
 	Comment javadoc1;
 	
@@ -1475,6 +1477,12 @@ class EmptyDeclarationTemplate {
 	@CopyMethod
 	static Node rawBody(EmptyDeclaration self) {
 		return null;
+	}
+	
+	@CopyMethod
+	static EmptyDeclaration rawBody(EmptyDeclaration self, Node body) {
+		DanglingNodes.addDanglingNode(self, body);
+		return self;
 	}
 	
 	@CopyMethod
