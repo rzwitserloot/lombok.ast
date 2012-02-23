@@ -73,6 +73,10 @@ abstract class TemporaryNode implements Node {
 		return false;
 	}
 	
+	static class SentinelNode extends TemporaryNode {
+		
+	}
+	
 	static class MethodParameters extends TemporaryNode {
 		List<Node> parameters = Lists.newArrayList();
 	}

@@ -61,11 +61,11 @@ import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
-import org.parboiled.google.collect.Lists;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.sun.tools.javac.main.JavaCompiler;
 import com.sun.tools.javac.main.OptionName;
@@ -134,7 +134,24 @@ public class Main {
 		private List<String> input = new ArrayList<String>();
 	}
 	
-	public static void main(String[] rawArgs) throws Exception {
+	public static void main(String[] args) throws Exception {
+		String[] SOURCE = {"null", "true", "false", "0x5D", "5L", "3.0F", "0x1p0d", "0x.1p0", "\"Hey\"", "'5'"};
+		
+		for (String source : SOURCE) {
+			Source s = new Source(source, "Test.java");
+			s.parseExpression();
+			int idx = 0;
+			System.out.printf("PARSED: %d\n", s.getNodes().size());
+			for (ParseProblem problem : s.getProblems()) {
+				System.out.printf("PROBLEM: %s\n", problem);
+			}
+			for (Node node : s.getNodes()) {
+				System.out.printf("Node %d: %s -- %s\n", ++idx, node.getClass().getSimpleName(), node);
+			}
+		}
+	}
+	
+	public static void main2(String[] rawArgs) throws Exception {
 		CmdArgs args;
 		CmdReader<CmdArgs> reader = CmdReader.of(CmdArgs.class);
 		

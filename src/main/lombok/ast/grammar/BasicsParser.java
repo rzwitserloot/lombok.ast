@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,8 +31,7 @@ import org.parboiled.BaseParser;
 import org.parboiled.MatcherContext;
 import org.parboiled.Rule;
 import org.parboiled.annotations.SuppressSubnodes;
-import org.parboiled.matchers.CharSetMatcher;
-import org.parboiled.support.Characters;
+import org.parboiled.matchers.CustomMatcher;
 
 /**
  * Contains the basics of java parsing: Whitespace and comment handling, as well as applying backslash-u escapes.
@@ -67,9 +66,9 @@ public class BasicsParser extends BaseParser<Node> {
 	
 	public Rule identifier() {
 		return Sequence(
-				identifierRaw().label("identifier"),
-				actions.checkIfKeyword(text("identifier")),
-				set(actions.createIdentifier(text("identifier"), node("identifier"))),
+				identifierRaw(),
+				actions.checkIfKeyword(match()),
+				push(actions.createIdentifier(match(), matchStart(), matchEnd())),
 				optWS());
 	}
 	
@@ -77,8 +76,8 @@ public class BasicsParser extends BaseParser<Node> {
 		return Sequence(
 				Ch('.'), optWS(),
 				identifierRaw().label("identifier"),
-				actions.checkIfKeyword(text("identifier")),
-				set(actions.createIdentifier(text("identifier"), node("identifier"))),
+				actions.checkIfKeyword(match()),
+				push(actions.createIdentifier(match(), matchStart(), matchEnd())),
 				optWS());
 	}
 	
@@ -102,42 +101,46 @@ public class BasicsParser extends BaseParser<Node> {
 		return Sequence(new JavaIdentifierStartMatcher(), ZeroOrMore(new JavaIdentifierPartMatcher()));
 	}
 	
+	@SuppressSubnodes
 	public Rule identifierPart() {
 		return new JavaIdentifierPartMatcher();
 	}
 	
-	private static class JavaIdentifierPartMatcher extends CharSetMatcher<Node> {
-		public JavaIdentifierPartMatcher() {
-			super(Characters.of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$"));
-		}
-		
-		@Override public boolean match(MatcherContext<Node> context) {
-			char current = context.getCurrentChar();
-			if (Character.isJavaIdentifierPart(current)) {
-				context.advanceIndex();
-				context.createNode();
-				return true;
-			}
-			return false;
-		}
-	}
-	
-	private static class JavaIdentifierStartMatcher extends CharSetMatcher<Node> {
+	private static final class JavaIdentifierStartMatcher extends AbstractJavaIdentifierMatcher {
 		public JavaIdentifierStartMatcher() {
-			super(Characters.of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$"));
+			super("IdentifierStart");
 		}
 		
-		@Override public boolean match(MatcherContext<Node> context) {
-			char current = context.getCurrentChar();
-			if (Character.isJavaIdentifierStart(current)) {
-				context.advanceIndex();
-				context.createNode();
-				return true;
-			}
-			return false;
+		@Override protected boolean acceptChar(char c) {
+			return Character.isJavaIdentifierStart(c);
 		}
 	}
 	
+	private static final class JavaIdentifierPartMatcher extends AbstractJavaIdentifierMatcher {
+		public JavaIdentifierPartMatcher() {
+			super("IdentifierPart");
+		}
+		
+		@Override protected boolean acceptChar(char c) {
+			return Character.isJavaIdentifierPart(c);
+		}
+	}
+	
+	private static abstract class AbstractJavaIdentifierMatcher extends CustomMatcher {
+		AbstractJavaIdentifierMatcher(String label) { super(label); }
+		@Override public final boolean isSingleCharMatcher() { return true; }
+		@Override public final boolean canMatchEmpty() { return false; }
+		@Override public final char getStarterChar() { return 'a'; }
+		@Override public final boolean isStarterChar(char c) { return acceptChar(c); }
+		@Override public final <V> boolean match(MatcherContext<V> context) {
+			char current = context.getCurrentChar();
+			if (!acceptChar(current)) return false;
+			context.advanceIndex(1);
+			context.createNode();
+			return true;
+		}
+		protected abstract boolean acceptChar(char c);
+	}
 	
 	/**
 	 * Any comment (block, line, or javadoc)
@@ -147,17 +150,17 @@ public class BasicsParser extends BaseParser<Node> {
 	public Rule comment() {
 		return Sequence(
 				FirstOf(lineComment(), blockComment()),
-				actions.logComment(lastText()));
+				actions.logComment(match()));
 	}
 	
 	@SuppressSubnodes
 	Rule lineComment() {
-		return Sequence(String("//"), ZeroOrMore(Sequence(TestNot(CharSet("\r\n")), Any())), FirstOf(String("\r\n"), Ch('\r'), Ch('\n'), Test(Eoi())));
+		return Sequence(String("//"), ZeroOrMore(Sequence(TestNot(AnyOf("\r\n")), ANY)), FirstOf(String("\r\n"), Ch('\r'), Ch('\n'), Test(EOI)));
 	}
 	
 	@SuppressSubnodes
 	Rule blockComment() {
-		return Sequence("/*", ZeroOrMore(Sequence(TestNot("*/"), Any())), "*/");
+		return Sequence("/*", ZeroOrMore(Sequence(TestNot("*/"), ANY)), "*/");
 	}
 	
 	/**

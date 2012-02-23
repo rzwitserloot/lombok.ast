@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -36,12 +36,45 @@ class SourceActions extends BaseActions<Node> {
 		this.source = source;
 	}
 	
-	Identifier createIdentifierIfNeeded(Node identifier, int pos) {
-		if (identifier instanceof Identifier) return (Identifier)identifier;
+	boolean p(Node value) {
+		return push(value.setPosition(new Position(startPos(), currentPos())));
+	}
+	
+	boolean startPosByNode() {
+		Node p = peek();
+		p.setPosition(new Position(peek(1).getPosition().getStart(), p.getPosition().getEnd()));
+		return true;
+	}
+	
+	boolean endPosByNode() {
+		Node p = peek(1);
+		p.setPosition(new Position(p.getPosition().getStart(), peek().getPosition().getEnd()));
+		return true;
+	}
+	
+	boolean endPosByPos() {
+		Node p = peek();
+		p.setPosition(new Position(p.getPosition().getStart(), currentPos()));
+		return true;
+	}
+	
+	boolean structure() {
+		source.registerStructure(getContext().getValueStack().peek(), matchStart(), matchEnd(), match());
+		return true;
+	}
+	
+	boolean turnToIdentifier() {
+		Node v = pop();
+		if (v instanceof Identifier) {
+			push(v);
+			return true;
+		}
+		
 		Identifier i = new Identifier();
-		i.setPosition(new Position(pos, pos));
-		DanglingNodes.addDanglingNode(i, identifier);
-		return i;
+		i.setPosition(new Position(currentPos(), currentPos()));
+		DanglingNodes.addDanglingNode(i, v);
+		push(i);
+		return true;
 	}
 	
 	Modifiers createModifiersIfNeeded(Node modifiers, int pos) {
@@ -52,23 +85,11 @@ class SourceActions extends BaseActions<Node> {
 		return m;
 	}
 	
-	<T extends Node> T posify(T node) {
-		int start = startPos();
-		int end = Math.max(start, currentPos());
-		node.setPosition(new Position(start, end));
-		return node;
-	}
-	
 	int startPos() {
 		return getContext().getStartIndex();
 	}
 	
 	int currentPos() {
 		return getContext().getCurrentIndex();
-	}
-	
-	void positionSpan(Node target, org.parboiled.Node<Node> start, org.parboiled.Node<Node> end) {
-		if (target == null || start == null || end == null) return;
-		target.setPosition(new Position(start.getStartIndex(), end.getEndIndex()));
 	}
 }

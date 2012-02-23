@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,12 @@
  */
 package lombok.ast.grammar;
 
+import lombok.ast.Identifier;
 import lombok.ast.Node;
+import lombok.ast.TypeReference;
+import lombok.ast.TypeReferencePart;
+import lombok.ast.TypeVariable;
+import lombok.ast.WildcardKind;
 
 import org.parboiled.BaseParser;
 import org.parboiled.Rule;
@@ -46,10 +51,12 @@ public class TypesParser extends BaseParser<Node> {
 	public Rule type() {
 		return Sequence(
 				nonArrayType(),
-				set(),
-				ZeroOrMore(Sequence(
-						Ch('['), group.basics.optWS(), Ch(']'), group.basics.optWS())),
-				set(actions.setArrayDimensionsOfType(value(), texts("ZeroOrMore/Sequence")))).label("type");
+				ZeroOrMore(
+						Test(Ch('['), group.basics.optWS(), Ch(']')),
+						Ch('['), actions.structure(),
+						group.basics.optWS(),
+						Ch(']'), actions.structure(),
+						actions.incrementArrayDimensions()));
 	}
 	
 	/**
@@ -58,7 +65,9 @@ public class TypesParser extends BaseParser<Node> {
 	public Rule primitiveType() {
 		return Sequence(
 				rawPrimitiveType(),
-				set(actions.createPrimitiveType(lastText())),
+				actions.p(new Identifier().astValue(match())),
+				actions.p(new TypeReferencePart().astIdentifier((Identifier) pop())),
+				actions.p(new TypeReference().rawParts().addToEnd(pop())),
 				group.basics.optWS());
 	}
 	
@@ -73,113 +82,124 @@ public class TypesParser extends BaseParser<Node> {
 	 * @see <a href="http://java.sun.com/docs/books/jls/third_edition/html/lexical.html#4.3">JLS section 4.3</a>
 	 */
 	public Rule referenceType() {
-		return Sequence(
-				referenceTypePart().label("head"),
-				ZeroOrMore(dotReferenceTypePart().label("tail")),
-				set(actions.createReferenceType(value("head"), values("ZeroOrMore/tail"))));
+		return refTypeInternal(referenceTypePart());
 	}
 	
-	Rule dotReferenceTypePart() {
+	public Rule plainReferenceType() {
+		return refTypeInternal(plainReferenceTypePart());
+	}
+	
+	Rule refTypeInternal(Rule partRule) {
 		return Sequence(
-				Ch('.'), group.basics.optWS(),
-				group.basics.identifier().label("partName"),
-				Optional(typeArguments()),
-				set(actions.createTypeReferencePart(node("partName"), value("Optional/typeArguments"))),
-				group.basics.optWS());
+				partRule,
+				actions.p(new TypeReference()),
+				swap(), actions.endPosByNode(),
+				swap(), push(((TypeReference) pop()).rawParts().addToEnd(pop())),
+				ZeroOrMore(
+						Ch('.'), actions.structure(), group.basics.optWS(),
+						partRule,
+						actions.endPosByNode(),
+						swap(),
+						push(((TypeReference) pop()).rawParts().addToEnd(pop()))));
 	}
 	
 	Rule referenceTypePart() {
 		return Sequence(
-				group.basics.identifier().label("partName"),
-				Optional(typeArguments()),
-				set(actions.createTypeReferencePart(node("partName"), value("Optional/typeArguments"))),
-				group.basics.optWS());
-	}
-	
-	public Rule plainReferenceType() {
-		return Sequence(
-				plainReferenceTypePart().label("head"),
-				ZeroOrMore(dotPlainReferenceTypePart().label("tail")),
-				set(actions.createReferenceType(value("head"), values("ZeroOrMore/tail"))));
+				plainReferenceTypePart(),
+				typeArguments(),
+				actions.addTypeArgsToTypeRefPart(peek(1), pop()));
 	}
 	
 	Rule plainReferenceTypePart() {
 		return Sequence(
-				group.basics.identifier().label("partName"),
-				set(actions.createTypeReferencePart(node("partName"), null)),
-				group.basics.optWS());
-	}
-	
-	Rule dotPlainReferenceTypePart() {
-		return Sequence(
-				Ch('.'), group.basics.optWS(),
-				group.basics.identifier().label("partName"),
-				set(actions.createTypeReferencePart(node("partName"), null)),
-				group.basics.optWS());
+				group.basics.identifier(),
+				actions.turnToIdentifier(),
+				actions.p(new TypeReferencePart()),
+				swap(), actions.endPosByNode(),
+				swap(), push(((TypeReferencePart) pop()).astIdentifier((Identifier) pop())));
 	}
 	
 	public Rule typeVariables() {
-		return Optional(Sequence(
-				Ch('<'),
-				group.basics.optWS(),
-				Optional(Sequence(
-						typeVariable().label("head"),
-						ZeroOrMore(Sequence(
-								Ch(','),
-								group.basics.optWS(),
-								typeVariable().label("tail"))))),
-				Ch('>'),
-				set(actions.createTypeVariables(value("Optional/Sequence/head"), values("Optional/Sequence/ZeroOrMore/Sequence/tail"))),
-				group.basics.optWS()));
+		return Sequence(
+				actions.p(new TemporaryNode.OrphanedTypeVariables()),
+				Optional(
+						Ch('<'), actions.structure(), group.basics.optWS(),
+						Optional(
+								typeVariable(),
+								((TemporaryNode.OrphanedTypeVariables) peek(1)).variables.add(pop()),
+								ZeroOrMore(
+										Ch(','), actions.structure(),
+										group.basics.optWS(),
+										typeVariable(),
+										((TemporaryNode.OrphanedTypeVariables) peek(1)).variables.add(pop()))),
+						Ch('>'), actions.structure(), actions.endPosByPos(), group.basics.optWS()));
 	}
 	
 	Rule typeVariable() {
 		return Sequence(
 				group.basics.identifier(),
-				Optional(Sequence(
-						Sequence(
-							String("extends"),
-							group.basics.testLexBreak(),
-							group.basics.optWS()),
+				actions.turnToIdentifier(),
+				actions.p(new TypeVariable()),
+				swap(), actions.endPosByNode(),
+				swap(), push(((TypeVariable) pop()).astName((Identifier) pop())),
+				Optional(
+						Test(String("extends"), group.basics.testLexBreak()),
+						String("extends"), actions.structure(),
+						//TODO It's not legal java but it's a common mistake; we should
+						// read 'super' too, create a list for it, so that the downstream checker
+						// can generate much nicer errors for it.
+						
+						group.basics.optWS(),
 						type(),
-						ZeroOrMore(Sequence(
-								Ch('&'), group.basics.optWS(),
-								type())))),
-				set(actions.createTypeVariable(value("identifier"), value("Optional/Sequence/type"), values("Optional/Sequence/ZeroOrMore/Sequence/type"))));
+						actions.endPosByNode(),
+						swap(), push(((TypeVariable) pop()).rawExtending().addToEnd(pop())),
+						ZeroOrMore(
+								Ch('&'), actions.structure(), group.basics.optWS(),
+								type(),
+								actions.endPosByNode(),
+								swap(), push(((TypeVariable) pop()).rawExtending().addToEnd(pop())))));
 	}
 	
 	/**
 	 * @see <a href="http://java.sun.com/docs/books/jls/third_edition/html/lexical.html#4.5">JLS section 4.5</a>
 	 */
 	public Rule typeArguments() {
-		return Optional(Sequence(
-				Ch('<'),
-				group.basics.optWS(),
-				Optional(Sequence(
-						typeArgument().label("head"),
-						ZeroOrMore(Sequence(
-								Ch(','),
-								group.basics.optWS(),
-								typeArgument().label("tail"))))),
-				Ch('>'),
-				set(actions.createTypeArguments(value("Optional/Sequence/head"), values("Optional/Sequence/ZeroOrMore/Sequence/tail"))),
-				group.basics.optWS())).label("typeArguments");
+		return Sequence(
+				actions.p(new TemporaryNode.TypeArguments()),
+				Optional(
+						Ch('<'), actions.structure(), group.basics.optWS(),
+						Optional(
+								typeArgument(),
+								((TemporaryNode.TypeArguments) peek(1)).arguments.add(pop()),
+								ZeroOrMore(
+										Ch(','), actions.structure(),
+										group.basics.optWS(),
+										typeArgument(),
+										((TemporaryNode.TypeArguments) peek(1)).arguments.add(pop()))),
+						Ch('>'), actions.structure(), actions.endPosByPos(), group.basics.optWS()));
 	}
 	
 	public Rule typeArgument() {
 		return FirstOf(
 				type(),
 				Sequence(
-						Ch('?').label("qmark"),
+						Test(Ch('?')),
+						actions.p(new TypeReference().astWildcard(WildcardKind.UNBOUND)),
+						Ch('?'), actions.structure(),
+						actions.endPosByPos(),
 						group.basics.optWS(),
-						FirstOf(String("extends"), String("super")).label("boundType"),
-						group.basics.testLexBreak(),
-						group.basics.optWS(),
-						type(),
-						set(actions.createWildcardedType(node("qmark"), node("boundType"), text("boundType"), value("type")))),
-				Sequence(
-						Ch('?').label("qmark"),
-						set(actions.createUnboundedWildcardType(node("qmark"))),
-						group.basics.optWS()));
+						Optional(
+								FirstOf(
+										Sequence(
+												Test(String("extends"), group.basics.testLexBreak()),
+												push(((TypeReference) pop()).astWildcard(WildcardKind.EXTENDS)),
+												String("extends"), actions.structure()),
+										Sequence(
+												Test(String("super"), group.basics.testLexBreak()),
+												push(((TypeReference) pop()).astWildcard(WildcardKind.SUPER)),
+												String("extends"), actions.structure())),
+								group.basics.optWS(),
+								type(),
+								actions.mergeTypeRefs())));
 	}
 }

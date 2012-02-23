@@ -30,15 +30,17 @@ import java.util.TreeMap;
 
 import lombok.Getter;
 import lombok.ast.Comment;
+import lombok.ast.DanglingNodes;
 import lombok.ast.Expression;
 import lombok.ast.ForwardingAstVisitor;
 import lombok.ast.JavadocContainer;
 import lombok.ast.Node;
+import lombok.ast.NodeStructures;
 import lombok.ast.Position;
 
 import org.parboiled.Context;
-import org.parboiled.RecoveringParseRunner;
 import org.parboiled.errors.ParseError;
+import org.parboiled.parserunners.RecoveringParseRunner;
 import org.parboiled.support.ParsingResult;
 
 import com.google.common.collect.ImmutableList;
@@ -58,7 +60,6 @@ public class Source {
 	private ParsingResult<Node> parsingResult;
 	
 	private TreeMap<Integer, Integer> positionDeltas;
-	private Map<org.parboiled.Node<Node>, Node> registeredStructures;
 	private Map<org.parboiled.Node<Node>, List<Comment>> registeredComments;
 	private String preprocessed;
 	private Map<Node, Collection<SourceStructure>> cachedSourceStructures;
@@ -90,7 +91,6 @@ public class Source {
 		parsingResult = null;
 		positionDeltas = Maps.newTreeMap();
 		registeredComments = new MapMaker().weakKeys().makeMap();
-		registeredStructures = new MapMaker().weakKeys().makeMap();
 		cachedSourceStructures = null;
 	}
 	
@@ -98,27 +98,29 @@ public class Source {
 		clear();
 		preProcess();
 		ParserGroup group = new ParserGroup(this);
-		ProfilerParseRunner<Node> runner = new ProfilerParseRunner<Node>(group.structures.compilationUnitEoi(), preprocessed);
-		this.parsingResult = runner.run();
-		StringBuilder out = new StringBuilder();
-		out.append(runner.getOverviewReport());
+		this.parsingResult = new RecoveringParseRunner<Node>(group.literals.anyLiteral()).run("true");
+//		ProfilerParseRunner<Node> runner = new ProfilerParseRunner<Node>(group.structures.compilationUnitEoi(), preprocessed);
+		
+//		StringBuilder out = new StringBuilder();
+//		out.append(runner.getOverviewReport());
 		postProcess();
-		return out.toString();
+		return "";
+//		return out.toString();
 	}
 	
-	public List<String> getDetailedProfileInformation(int top) {
-		clear();
-		preProcess();
-		ParserGroup group = new ParserGroup(this);
-		ProfilerParseRunner<Node> runner = new ProfilerParseRunner<Node>(group.structures.compilationUnitEoi(), preprocessed);
-		this.parsingResult = runner.run();
-		List<String> result = Lists.newArrayList();
-		result.add(runner.getOverviewReport());
-		result.addAll(runner.getExtendedReport(top));
-		postProcess();
-		return result;
-	}
-	
+//	public List<String> getDetailedProfileInformation(int top) {
+//		clear();
+//		preProcess();
+//		ParserGroup group = new ParserGroup(this);
+//		ProfilerParseRunner<Node> runner = new ProfilerParseRunner<Node>(group.structures.compilationUnitEoi(), preprocessed);
+//		this.parsingResult = runner.run();
+//		List<String> result = Lists.newArrayList();
+//		result.add(runner.getOverviewReport());
+//		result.addAll(runner.getExtendedReport(top));
+//		postProcess();
+//		return result;
+//	}
+//	
 	private List<Integer> calculateLineEndings() {
 		ImmutableList.Builder<Integer> builder = ImmutableList.builder();
 		
@@ -136,7 +138,7 @@ public class Source {
 		if (parsed) return;
 		preProcess();
 		ParserGroup group = new ParserGroup(this);
-		parsingResult = RecoveringParseRunner.run(group.structures.compilationUnitEoi(), preprocessed);
+		parsingResult = new RecoveringParseRunner<Node>(group.structures.compilationUnitEoi()).run(preprocessed);
 		postProcess();
 	}
 	
@@ -144,7 +146,7 @@ public class Source {
 		if (parsed) return;
 		preProcess();
 		ParserGroup group = new ParserGroup(this);
-		parsingResult = RecoveringParseRunner.run(group.structures.typeBodyMember(), preprocessed);
+		parsingResult = new RecoveringParseRunner<Node>(group.structures.typeBodyMember()).run(preprocessed);
 		postProcess();
 	}
 	
@@ -152,7 +154,7 @@ public class Source {
 		if (parsed) return;
 		preProcess();
 		ParserGroup group = new ParserGroup(this);
-		parsingResult = RecoveringParseRunner.run(group.statements.anyStatement(), preprocessed);
+		parsingResult = new RecoveringParseRunner<Node>(group.statements.anyStatement()).run(preprocessed);
 		postProcess();
 	}
 	
@@ -160,14 +162,23 @@ public class Source {
 		if (parsed) return;
 		preProcess();
 		ParserGroup group = new ParserGroup(this);
-		parsingResult = RecoveringParseRunner.run(group.expressions.anyExpression(), preprocessed);
+		parsingResult = new RecoveringParseRunner<Node>(group.expressions.anyExpression()).run(preprocessed);
 		postProcess();
 	}
+	
+	public void parseLiteral() {
+		if (parsed) return;
+		preProcess();
+		ParserGroup group = new ParserGroup(this);
+		parsingResult = new RecoveringParseRunner<Node>(group.literals.anyLiteral()).run(preprocessed);
+		postProcess();
+	}
+	
 	public void parseVariableDefinition() {
 		if (parsed) return;
 		preProcess();
 		ParserGroup group = new ParserGroup(this);
-		parsingResult = RecoveringParseRunner.run(group.structures.variableDefinition(), preprocessed);
+		parsingResult = new RecoveringParseRunner<Node>(group.structures.variableDefinition()).run(preprocessed);
 		postProcess();
 	}
 	
@@ -178,16 +189,15 @@ public class Source {
 			problems.add(new ParseProblem(new Position(mapPosition(errStart), mapPosition(errEnd)), error.toString()));
 		}
 		
+		nodes.add(parsingResult.resultValue);
+		
 		if (parsingResult.parseTreeRoot != null) {
-			nodes.add(parsingResult.parseTreeRoot.getValue());
 			gatherComments(parsingResult.parseTreeRoot);
 		}
 		
 		comments = Collections.unmodifiableList(comments);
 		nodes = Collections.unmodifiableList(nodes);
 		problems = Collections.unmodifiableList(problems);
-		
-		rtrimPositions(nodes, comments);
 		
 		//TODO Write test case with javadoc intermixed with empty declares.
 		//TODO test javadoc on a package declaration.
@@ -201,18 +211,23 @@ public class Source {
 		parsed = true;
 	}
 	
-	void registerStructure(Node node, org.parboiled.Node<Node> pNode) {
-		registeredStructures.put(pNode, node);
+	void registerStructure(Node lombokNode, int strStart, int strEnd, String strText) {
+		NodeStructures.addSourceStructure(lombokNode, new SourceStructure(new Position(strStart, strEnd), strText));
+	}
+	
+	void transportLogistics(Node from, Node to) {
+		for (SourceStructure ss : NodeStructures.getSourceStructures(from)) {
+			NodeStructures.addSourceStructure(to, ss);
+		}
+		for (Node d : DanglingNodes.getDanglingNodes(from)) {
+			DanglingNodes.addDanglingNode(to, d);
+		}
 	}
 	
 	public Map<Node, Collection<SourceStructure>> getSourceStructures() {
 		if (cachedSourceStructures != null) return cachedSourceStructures;
 		parseCompilationUnit();
 		ListMultimap<Node, SourceStructure> map = LinkedListMultimap.create();
-		
-		org.parboiled.Node<Node> pNode = parsingResult.parseTreeRoot;
-		
-		buildSourceStructures(pNode, null, map);
 		
 		Map<Node, Collection<SourceStructure>> result = map.asMap();
 		
@@ -225,90 +240,6 @@ public class Source {
 		}
 		
 		return cachedSourceStructures = result;
-	}
-	
-	private void addSourceStructure(ListMultimap<Node, SourceStructure> map, Node node, SourceStructure structure) {
-		if (structure.getPosition().size() > 0 && structure.getContent().trim().length() > 0 &&
-				!structure.getPosition().equals(node.getPosition())) {
-			
-			map.put(node, structure);
-		}
-	}
-	
-	private void buildSourceStructures(org.parboiled.Node<Node> pNode, Node owner, ListMultimap<Node, SourceStructure> map) {
-		Node target = registeredStructures.remove(pNode);
-		if (target != null || pNode.getChildren().isEmpty()) {
-			int start = pNode.getStartIndex();
-			int end = pNode.getEndIndex();
-			String text = preprocessed.substring(start, end);
-			SourceStructure structure = new SourceStructure(new Position(start, end), text);
-			if (target != null) addSourceStructure(map, target, structure);
-			else if (pNode.getValue() != null && !(pNode.getValue() instanceof TemporaryNode)) addSourceStructure(map, pNode.getValue(), structure);
-			else if (owner != null) addSourceStructure(map, owner, structure);
-		} else {
-			Node possibleOwner = pNode.getValue();
-			if (possibleOwner instanceof TemporaryNode) possibleOwner = null;
-			for (org.parboiled.Node<Node> child : pNode.getChildren()) {
-				if (child.getValue() == null || child.getValue() instanceof TemporaryNode) continue;
-				/* If the next if holds true, then we aren't the true generator; the child generated the node and this pNode adopted it */
-				if (child.getValue() == possibleOwner) possibleOwner = null;
-			}
-			
-			if (possibleOwner != null) owner = possibleOwner;
-			
-			for (org.parboiled.Node<Node> child : pNode.getChildren()) {
-				buildSourceStructures(child, owner, map);
-			}
-		}
-	}
-	
-	/**
-	 * The end positions of all nodes include their trailing whitespace which isn't very convenient.
-	 * We'll 'fix' the end marker of each node by trimming it back. This is somewhat complicated as comments also need to be trimmed across.
-	 * We also adjust all positions to conform with the raw input (undoing any positional shifts caused by preprocessing).
-	 */
-	private void rtrimPositions(List<Node> nodes, List<Comment> comments) {
-		final boolean[] whitespace = new boolean[preprocessed.length()];
-		for (Comment comment : comments) {
-			Position p = comment.getPosition();
-			if (!p.isUnplaced()) {
-				for (int i = p.getStart(); i < p.getEnd(); i++) whitespace[i] = true;
-			}
-		}
-		
-		/* Process actual whitespace in preprocessed source data */ {
-			char[] chars = preprocessed.toCharArray();
-			for (int i = 0; i < chars.length; i++) if (Character.isWhitespace(chars[i])) whitespace[i] = true;
-		}
-		
-		for (Node node : nodes) node.accept(new ForwardingAstVisitor() {
-			@Override public boolean visitNode(Node node) {
-				Position p = node.getPosition();
-				if (p.isUnplaced()) return false;
-				
-				int trimmed = Math.min(whitespace.length, p.getEnd());
-				while (trimmed > 0 && whitespace[trimmed-1]) trimmed--;
-				
-				int start, end;
-				
-				if (p.getEnd() - p.getStart() == 0) {
-					if (node.getParent() != null) {
-						start = Math.min(node.getParent().getPosition().getEnd(), Math.max(node.getParent().getPosition().getStart(), p.getStart()));
-						end = start;
-					} else {
-						start = p.getStart();
-						end = start;
-					}
-				} else {
-					start = p.getStart();
-					end = Math.max(trimmed, start);
-				}
-				
-				node.setPosition(new Position(start, end));
-				
-				return false;
-			}
-		});
 	}
 	
 	private void fixPositions(List<? extends Node> nodes) {
@@ -331,6 +262,12 @@ public class Source {
 						}
 					}
 				}
+				for (SourceStructure struct : NodeStructures.getSourceStructures(node)) {
+					Position pos = struct.getPosition();
+					if (pos.isUnplaced()) continue;
+					struct.setPosition(new Position(mapPosition(pos.getStart()), mapPosition(pos.getEnd())));
+				}
+				
 				return false;
 			}
 		});

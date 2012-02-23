@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,12 +31,11 @@ public class BasicsActions extends SourceActions {
 		super(source);
 	}
 	
-	public Node createIdentifier(String text, org.parboiled.Node<Node> rawIdentifier) {
+	public Node createIdentifier(String text, int start, int end) {
 		Identifier id = new Identifier();
 		if (text != null) id.astValue(text);
 		
-		int start = rawIdentifier.getStartIndex();
-		int end = Math.max(start, rawIdentifier.getEndIndex());
+		end = Math.max(start, end);
 		id.setPosition(new Position(start, end));
 		return id;
 	}
@@ -46,24 +45,22 @@ public class BasicsActions extends SourceActions {
 	}
 	
 	public boolean logComment(String text) {
-		if (text.startsWith("//")) return logLineComment(text);
-		else return logBlockComment(text);
+		Comment c = text.startsWith("//") ? createLineComment(text) : createBlockComment(text);
+		source.registerComment(getContext(), c);
+		return true;
 	}
 	
-	public boolean logBlockComment(String text) {
-		if (text.startsWith("/*")) text = text.substring(2);
-		if (text.endsWith("*/")) text = text.substring(0, text.length() - 2);
+	public Comment createBlockComment(String text) {
+		text = text.substring(2, text.length() - 2);
 		Comment c = new Comment().astBlockComment(true).astContent(text);
 		c.setPosition(new Position(startPos(), currentPos()));
-		source.registerComment(getContext(), c);
-		return true;
+		return c;
 	}
 	
-	public boolean logLineComment(String text) {
-		if (text.startsWith("//")) text = text.substring(2);
+	public Comment createLineComment(String text) {
+		text = text.substring(2);
 		Comment c = new Comment().astBlockComment(false).astContent(text);
 		c.setPosition(new Position(startPos(), currentPos()));
-		source.registerComment(getContext(), c);
-		return true;
+		return c;
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,24 @@
  */
 package lombok.ast.grammar;
 
+import lombok.ast.AnnotationDeclaration;
+import lombok.ast.AnnotationMethodDeclaration;
+import lombok.ast.ClassDeclaration;
+import lombok.ast.ConstructorDeclaration;
+import lombok.ast.EmptyDeclaration;
+import lombok.ast.EnumConstant;
+import lombok.ast.EnumDeclaration;
+import lombok.ast.EnumTypeBody;
+import lombok.ast.ExecutableDeclaration;
+import lombok.ast.Identifier;
+import lombok.ast.InterfaceDeclaration;
+import lombok.ast.KeywordModifier;
+import lombok.ast.MethodDeclaration;
+import lombok.ast.Modifiers;
 import lombok.ast.Node;
+import lombok.ast.NormalTypeBody;
+import lombok.ast.TypeBody;
+import lombok.ast.TypeDeclaration;
 
 import org.parboiled.BaseParser;
 import org.parboiled.Rule;
@@ -37,53 +54,58 @@ public class StructuresParser extends BaseParser<Node> {
 	}
 	
 	public Rule typeBody() {
+		return typeBody_(typeBodyMember());
+	}
+	
+	public Rule annotationTypeBody() {
+		return typeBody_(annotationBodyMember());
+	}
+	
+	Rule typeBody_(Rule member) {
 		return Sequence(
-				Ch('{'), group.basics.optWS(),
-				typeBodyDeclarations(), set(),
-				Ch('}'), group.basics.optWS(),
-				set(actions.posify(value())));
+				Test(Ch('{')),
+				actions.p(new NormalTypeBody()),
+				Ch('{'), actions.structure(), group.basics.optWS(),
+				typeBodyDeclarations(member),
+				Ch('}'), actions.structure(), actions.endPosByPos(),
+				group.basics.optWS());
+	}
+	
+	Rule typeBodyDeclarations(Rule member) {
+		return ZeroOrMore(
+				member,
+				actions.endPosByNode(),
+				swap(),
+				push(((TypeBody) pop()).rawMembers().addToEnd(pop())));
 	}
 	
 	public Rule typeBodyMember() {
 		return FirstOf(
-				anyTypeDeclaration(),
 				fieldDeclaration(),
-				methodDeclaration(),
 				constructorDeclaration(),
+				methodDeclaration(),
+				anyTypeDeclaration(),
 				staticInitializer(),
-				instanceInitializer(),
-				emptyDeclaration());
+				instanceInitializer());
 	}
 	
-	Rule typeBodyDeclarations() {
-		return Sequence(
-				ZeroOrMore(typeBodyMember().label("member")).label("members"),
-				set(actions.createNormalTypeBody(values("members/member"))));
+	Rule annotationBodyMember() {
+		return FirstOf(
+				annotationMethodDeclaration(),
+				anyTypeDeclaration(),
+				fieldDeclaration());
 	}
 	
 	Rule emptyDeclaration() {
-		return Sequence(Ch(';'), group.basics.optWS(), set(actions.createEmptyDeclaration()));
-	}
-	
-	public Rule methodArguments() {
 		return Sequence(
-				Ch('('),
-				group.basics.optWS(),
-				Optional(Sequence(
-						group.expressions.anyExpression(),
-						set(),
-						ZeroOrMore(Sequence(
-								Ch(','),
-								group.basics.optWS(),
-								group.expressions.anyExpression(), set())))),
-				Ch(')'),
-				group.basics.optWS(),
-				set(actions.createMethodArguments(value("Optional/Sequence"), values("Optional/Sequence/ZeroOrMore/Sequence"))));
+				Ch(';'),
+				actions.p(new EmptyDeclaration()),
+				group.basics.optWS());
 	}
 	
 	public Rule anyTypeDeclaration() {
 		return Sequence(
-				TestNot(FirstOf(Eoi(), Ch('}'))),
+				TestNot(FirstOf(EOI, Ch('}'))),
 				FirstOf(
 						classOrInterfaceDeclaration(),
 						enumDeclaration(),
@@ -93,169 +115,307 @@ public class StructuresParser extends BaseParser<Node> {
 	
 	public Rule classOrInterfaceDeclaration() {
 		return Sequence(
-				typeDeclarationModifiers().label("modifiers"),
-				FirstOf(String("class"), String("interface")).label("kind"),
-				group.basics.testLexBreak(), group.basics.optWS(),
-				group.basics.identifier().label("typeName"),
-				group.types.typeVariables().label("typeParameters"),
-				ZeroOrMore(FirstOf(
-						extendsClause(),
-						implementsClause()).label("addon")).label("addons"),
-				typeBody().label("body"),
-				set(actions.createTypeDeclaration(text("kind"), value("modifiers"), value("typeName"), value("typeParameters"), value("body"), values("addons/addon"))));
+				modifiers(),
+				FirstOf(classDeclaration(), interfaceDeclaration()));
+	}
+	
+	Rule classOrInterfaceSig(String keyword, Rule addonsRule) {
+		return Sequence(
+				actions.startPosByNode(),
+				push(((TypeDeclaration) pop()).astModifiers((Modifiers) pop())),
+				String(keyword), actions.structure(),
+				group.basics.optWS(),
+				group.basics.identifier(),
+				actions.turnToIdentifier(),
+				swap(),
+				push(((TypeDeclaration) pop()).astName((Identifier) pop())),
+				group.types.typeVariables(),
+				actions.addTypeVarsToTypeDeclaration(peek(1), pop()),
+				addonsRule,
+				typeBody(),
+				actions.endPosByNode(),
+				swap(),
+				push(((TypeDeclaration) pop()).rawBody(pop())));
+	}
+	
+	Rule classDeclaration() {
+		return Sequence(
+				Test(String("class"), group.basics.testLexBreak()),
+				push(new ClassDeclaration()),
+				classOrInterfaceSig("class",
+						Optional(
+								FirstOf(
+										Sequence(
+												extendsClause(),
+												actions.addExtendsToTypeDeclaration(peek(1), pop()),
+												Optional(
+														implementsClause(),
+														actions.addImplementsToTypeDeclaration(peek(1), pop()))),
+										Sequence(
+												implementsClause(),
+												actions.addImplementsToTypeDeclaration(peek(1), pop()),
+												Optional(
+														extendsClause(),
+														actions.addExtendsToTypeDeclaration(peek(1), pop())))))));
+	}
+	
+	Rule interfaceDeclaration() {
+		return Sequence(
+				Test(String("interface"), group.basics.testLexBreak()),
+				push(new InterfaceDeclaration()),
+				classOrInterfaceSig("interface",
+						Optional(
+								extendsClause(),
+								actions.addExtendsToTypeDeclaration(peek(1), pop()))));
 	}
 	
 	Rule extendsClause() {
 		return Sequence(
-				Sequence(String("extends"), group.basics.testLexBreak(), group.basics.optWS()),
-				group.types.type().label("head"),
-				ZeroOrMore(Sequence(
-						Ch(','), group.basics.optWS(),
-						group.types.type()).label("tail")),
-				set(actions.createExtendsClause(value("head"), values("ZeroOrMore/tail"))));
+				Test(String("extends"), group.basics.testLexBreak()),
+				actions.p(new TemporaryNode.ExtendsClause()),
+				String("extends"), actions.structure(),
+				group.basics.optWS(),
+				group.types.type(),
+				actions.endPosByNode(),
+				((TemporaryNode.ExtendsClause) peek(1)).superTypes.add(pop()),
+				ZeroOrMore(
+						Ch(','), actions.structure(),
+						group.basics.optWS(),
+						group.types.type(),
+						actions.endPosByNode(),
+						((TemporaryNode.ExtendsClause) peek(1)).superTypes.add(pop())));
 	}
 	
 	Rule implementsClause() {
 		return Sequence(
-				Sequence(String("implements"), group.basics.testLexBreak(), group.basics.optWS()),
-				group.types.type().label("head"),
-				ZeroOrMore(Sequence(
-						Ch(','), group.basics.optWS(),
-						group.types.type()).label("tail")),
-				set(actions.createImplementsClause(value("head"), values("ZeroOrMore/tail"))));
-	}
-	
-	public Rule enumDeclaration() {
-		return Sequence(
-				typeDeclarationModifiers().label("modifiers"),
-				String("enum"), group.basics.testLexBreak(), group.basics.optWS(),
-				group.basics.identifier().label("typeName"),
-				ZeroOrMore(FirstOf(
-						extendsClause(),
-						implementsClause()).label("addon")).label("addons"),
-				enumBody().label("body"),
-				set(actions.createEnumDeclaration(value("modifiers"), value("typeName"), value("body"), values("addons/addon"))));
-	}
-	
-	public Rule annotationDeclaration() {
-		return Sequence(
-				typeDeclarationModifiers().label("modifiers"),
-				Ch('@'), group.basics.optWS(),
-				String("interface"), group.basics.testLexBreak(), group.basics.optWS(),
-				group.basics.identifier().label("name"),
-				Ch('{').label("typeOpen"), group.basics.optWS(),
-				ZeroOrMore(annotationElementDeclaration().label("member")).label("members"),
-				Ch('}').label("typeClose"), group.basics.optWS(),
-				set(actions.createAnnotationDeclaration(value("modifiers"), value("name"), values("members/member"), node("typeOpen"), node("typeClose"))));
-	}
-	
-	Rule annotationElementDeclaration() {
-		return FirstOf(
-				annotationMethodDeclaration(),
-				fieldDeclaration(),
-				classOrInterfaceDeclaration(),
-				enumDeclaration(),
-				annotationDeclaration(),
-				Sequence(Ch(';'), group.basics.optWS())
-				);
+				Test(String("implements"), group.basics.testLexBreak()),
+				actions.p(new TemporaryNode.ImplementsClause()),
+				String("implements"), actions.structure(),
+				group.basics.optWS(),
+				group.types.type(),
+				actions.endPosByNode(),
+				((TemporaryNode.ImplementsClause) peek(1)).superInterfaces.add(pop()),
+				ZeroOrMore(
+						Ch(','), actions.structure(),
+						group.basics.optWS(),
+						group.types.type(),
+						actions.endPosByNode(),
+						((TemporaryNode.ImplementsClause) peek(1)).superInterfaces.add(pop())));
 	}
 	
 	Rule enumBody() {
 		return Sequence(
-				Ch('{'), group.basics.optWS(),
-				Optional(Sequence(
-						enumConstant().label("head"),
-						ZeroOrMore(Sequence(
-								Ch(','), group.basics.optWS(),
-								enumConstant()).label("tail")),
-						Optional(Sequence(Ch(','), group.basics.optWS())))).label("constants"),
-				Optional(Sequence(
-						Ch(';'), group.basics.optWS(),
-						typeBodyDeclarations())).label("typeBodyDeclarations"),
-				Ch('}'), group.basics.optWS(),
-				set(actions.createEnumBody(value("constants/Sequence/head"), values("constants/Sequence/ZeroOrMore/tail"), value("typeBodyDeclarations"))));
+				Test(Ch('{')),
+				actions.p(new EnumTypeBody()),
+				Ch('{'), actions.structure(),
+				group.basics.optWS(),
+				Optional(
+						enumConstant(),
+						swap(),
+						push(((EnumTypeBody) pop()).rawConstants().addToEnd(pop())),
+						ZeroOrMore(
+								Ch(','), actions.structure(), group.basics.optWS(),
+								enumConstant(),
+								swap(),
+								push(((EnumTypeBody) pop()).rawConstants().addToEnd(pop()))),
+						Optional(Sequence(Ch(','), actions.structure(), group.basics.optWS()))),
+				Optional(
+						Ch(';'), actions.structure(), group.basics.optWS(),
+						typeBodyDeclarations(typeBodyMember())),
+				Ch('}'), actions.structure(),
+				actions.endPosByPos(),
+				group.basics.optWS());
 	}
 	
 	Rule enumConstant() {
 		return Sequence(
-				ZeroOrMore(annotation().label("annotation")).label("annotations"),
-				group.basics.identifier().label("name"),
-				Optional(methodArguments()).label("arguments"),
-				Optional(typeBody()).label("body"),
-				set(actions.createEnumConstant(values("annotations/annotation"), value("name"), value("arguments"), value("body"))));
+				actions.p(new EnumConstant()),
+				ZeroOrMore(
+						annotation(),
+						swap(),
+						push(((EnumConstant) pop()).rawAnnotations().addToEnd(pop()))),
+				group.basics.identifier(),
+				actions.turnToIdentifier(),
+				swap(),
+				push(((EnumConstant) pop()).astName((Identifier) pop())),
+				Optional(
+						methodArguments(),
+						actions.addMethodArgumentsToEnumConstant(peek(1), pop())),
+				Optional(
+						typeBody(),
+						swap(),
+						push(((EnumConstant) pop()).rawBody(pop()))));
+	}
+	
+	public Rule enumDeclaration() {
+		return Sequence(
+				modifiers(),
+				Test(String("enum"), group.basics.testLexBreak()),
+				push(new EnumDeclaration()),
+				actions.startPosByNode(),
+				push(((TypeDeclaration) pop()).astModifiers((Modifiers) pop())),
+				String("enum"), actions.structure(),
+				group.basics.optWS(),
+				group.basics.identifier(),
+				actions.turnToIdentifier(),
+				swap(),
+				push(((TypeDeclaration) pop()).astName((Identifier) pop())),
+				Optional(
+						implementsClause(),
+						actions.addImplementsToTypeDeclaration(peek(1), pop())),
+				enumBody(),
+				actions.endPosByNode(),
+				swap(),
+				push(((TypeDeclaration) pop()).rawBody(pop())));
+	}
+	
+	public Rule annotationDeclaration() {
+		return Sequence(
+				modifiers(),
+				Test(Ch('@'), group.basics.optWS(), String("interface"), group.basics.testLexBreak()),
+				push(new AnnotationDeclaration()),
+				actions.startPosByNode(),
+				push(((TypeDeclaration) pop()).astModifiers((Modifiers) pop())),
+				Ch('@'), actions.structure(),
+				group.basics.optWS(),
+				String("interface"), actions.structure(),
+				group.basics.optWS(),
+				group.basics.identifier(),
+				actions.turnToIdentifier(),
+				swap(),
+				push(((TypeDeclaration) pop()).astName((Identifier) pop())),
+				annotationTypeBody(),
+				actions.endPosByNode(),
+				swap(),
+				push(((TypeDeclaration) pop()).rawBody(pop())));
+	}
+	
+	public Rule methodArguments() {
+		return Sequence(
+				Test(Ch('(')),
+				actions.p(new TemporaryNode.MethodArguments()),
+				Ch('('), actions.structure(),
+				group.basics.optWS(),
+				Optional(
+						group.expressions.anyExpression(),
+						((TemporaryNode.MethodArguments) peek(1)).arguments.add(pop()),
+						ZeroOrMore(
+								Ch(','), actions.structure(),
+								group.basics.optWS(),
+								group.expressions.anyExpression(),
+								((TemporaryNode.MethodArguments) peek(1)).arguments.add(pop()))),
+				Ch(')'), actions.structure(), actions.endPosByPos(),
+				group.basics.optWS());
+	}
+	
+	Rule executableDeclaration(Rule coreSigRule, Rule extendedDimsRule) {
+		return Sequence(
+				modifiers(),
+				swap(),
+				push(((ExecutableDeclaration) pop()).astModifiers((Modifiers) pop())),
+				group.types.typeVariables(),
+				actions.addTypeVarsToExecutableDeclaration(peek(1), pop()),
+				coreSigRule,
+				methodParameters(),
+				actions.addParamsToExecutableDeclaration(peek(1), pop()),
+				extendedDimsRule,
+				Optional(
+						Sequence(String("throws"), group.basics.testLexBreak()), actions.structure(),
+						group.basics.optWS(),
+						group.types.type(),
+						swap(),
+						push(((ExecutableDeclaration) pop()).rawThrownTypeReferences().addToEnd(pop())),
+						ZeroOrMore(
+								Ch(','), actions.structure(), group.basics.optWS(),
+								group.types.type(),
+								swap(),
+								push(((ExecutableDeclaration) pop()).rawThrownTypeReferences().addToEnd(pop())))),
+				FirstOf(
+						Sequence(
+								Ch(';'), actions.structure(), group.basics.optWS()),
+						Sequence(
+								group.statements.blockStatement(),
+								swap(),
+								push(((ExecutableDeclaration) pop()).rawBody(pop())))));
 	}
 	
 	public Rule constructorDeclaration() {
 		return Sequence(
-				methodDeclarationModifiers().label("modifiers"),
-				group.types.typeVariables().label("typeParameters"),
-				group.basics.identifier().label("typeName"),
-				methodParameters().label("params"),
-				Optional(Sequence(
-						Sequence(String("throws"), group.basics.testLexBreak(), group.basics.optWS()),
-						group.types.type().label("throwsHead"),
-						ZeroOrMore(Sequence(Ch(','), group.basics.optWS(), group.types.type()).label("throwsTail"))
-						)).label("throwsClause"),
-				FirstOf(
-						Sequence(Ch(';'), group.basics.optWS()),
-						group.statements.blockStatement()).label("body"),
-				set(actions.createConstructorDeclaration(value("modifiers"), value("typeParameters"), value("typeName"), value("params"), 
-						value("throwsClause/Sequence/throwsHead"), values("throwsClause/Sequence/ZeroOrMore/throwsTail"),
-						value("body"))));
-	}
-	
-	public Rule annotationMethodDeclaration() {
-		return Sequence(
-				methodDeclarationModifiers().label("modifiers"),
-				group.types.type().label("resultType"),
-				group.basics.identifier().label("methodName"),
-				Ch('('), group.basics.optWS(),
-				Ch(')'), group.basics.optWS(),
-				ZeroOrMore(Sequence(Ch('['), group.basics.optWS(), Ch(']'), group.basics.optWS()).label("dim")).label("dims"),
-				Optional(Sequence(
-						Sequence(String("default"), group.basics.testLexBreak(), group.basics.optWS()),
-						annotationElementValue())).label("defaultValue"),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createAnnotationMethodDeclaration(value("modifiers"), value("resultType"), value("methodName"), nodes("dims/dim"), value("defaultValue"))));
+				actions.p(new ConstructorDeclaration()),
+				executableDeclaration(
+						Sequence(
+								group.basics.identifier().label("typeName"),
+								actions.turnToIdentifier(),
+								swap(),
+								push(((ConstructorDeclaration) pop()).astTypeName((Identifier) pop()))),
+						EMPTY));
 	}
 	
 	public Rule methodDeclaration() {
 		return Sequence(
-				methodDeclarationModifiers().label("modifiers"),
-				group.types.typeVariables().label("typeParameters"),
-				group.types.type().label("resultType"),
+				actions.p(new MethodDeclaration()),
+				executableDeclaration(
+						Sequence(
+								group.types.type(),
+								swap(),
+								push(((MethodDeclaration) pop()).rawReturnTypeReference(pop())),
+								group.basics.identifier().label("methodName"),
+								actions.turnToIdentifier(),
+								swap(),
+								push(((MethodDeclaration) pop()).astMethodName((Identifier) pop()))),
+						ZeroOrMore(
+								Ch('['),
+								group.basics.optWS(),
+								Ch(']'),
+								group.basics.optWS(),
+								actions.incrementMethodReturnTypeDimensions())));
+	}
+	
+	public Rule annotationMethodDeclaration() {
+		return Sequence(
+				actions.p(new AnnotationMethodDeclaration()),
+				modifiers(),
+				swap(),
+				push(((AnnotationMethodDeclaration) pop()).astModifiers((Modifiers) pop())),
+				group.types.type(),
+				swap(),
+				push(((AnnotationMethodDeclaration) pop()).rawReturnTypeReference(pop())),
 				group.basics.identifier().label("methodName"),
-				methodParameters().label("params"),
-				ZeroOrMore(Sequence(Ch('['), group.basics.optWS(), Ch(']'), group.basics.optWS()).label("dim")).label("dims"),
-				Optional(Sequence(
-						Sequence(String("throws"), group.basics.testLexBreak(), group.basics.optWS()),
-						group.types.type().label("throwsHead"),
-						ZeroOrMore(Sequence(Ch(','), group.basics.optWS(), group.types.type()).label("throwsTail"))
-						)).label("throwsClause"),
-				FirstOf(
-						Sequence(Ch(';'), group.basics.optWS()),
-						group.statements.blockStatement()).label("body"),
-				set(actions.createMethodDeclaration(value("modifiers"), value("typeParameters"), value("resultType"), value("methodName"), value("params"), 
-						nodes("dims/dim"), value("throwsClause/Sequence/throwsHead"), values("throwsClause/Sequence/ZeroOrMore/throwsTail"),
-						value("body"))));
+				actions.turnToIdentifier(),
+				swap(),
+				push(((AnnotationMethodDeclaration) pop()).astMethodName((Identifier) pop())),
+				Ch('('), actions.structure(), group.basics.optWS(),
+				Ch(')'), actions.structure(), group.basics.optWS(),
+				Optional(
+						Sequence(String("default"), group.basics.testLexBreak()), actions.structure(),
+						group.basics.optWS(),
+						annotationElementValue(),
+						swap(),
+						push(((AnnotationMethodDeclaration) pop()).rawDefaultValue(pop()))),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	Rule methodParameters() {
 		return Sequence(
-				Ch('('), group.basics.optWS(),
-				Optional(Sequence(
-						methodParameter().label("head"),
-						ZeroOrMore(Sequence(
-								Ch(','), group.basics.optWS(),
-								methodParameter().label("tail"))))),
-				Ch(')'), group.basics.optWS(),
-				set(actions.createMethodParameters(value("Optional/Sequence/head"), values("Optional/Sequence/ZeroOrMore/Sequence/tail"))));
+				Test(Ch('(')),
+				actions.p(new TemporaryNode.MethodParameters()),
+				Ch('('), actions.structure(),
+				group.basics.optWS(),
+				Optional(
+						methodParameter(),
+						((TemporaryNode.MethodParameters) peek(1)).parameters.add(pop()),
+						swap(),
+						ZeroOrMore(
+								Ch(','), actions.structure(), group.basics.optWS(),
+								methodParameter(),
+								((TemporaryNode.MethodParameters) peek(1)).parameters.add(pop()))),
+				Ch(')'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	Rule methodParameter() {
 		return Sequence(
-				variableDefinitionModifiers().label("modifiers"),
-				group.types.type().label("type"),
+				modifiers(),
+				group.types.type(),
 				Optional(Sequence(String("..."), group.basics.optWS())).label("varargs"),
 				group.basics.identifier().label("name"),
 				ZeroOrMore(Sequence(Ch('[').label("open"), group.basics.optWS(), Ch(']').label("closed"), group.basics.optWS()).label("dim")).label("dims"),
@@ -364,48 +524,46 @@ public class StructuresParser extends BaseParser<Node> {
 	
 	@SuppressSubnodes
 	Rule anyKeyword() {
-		return FirstOf("final", "strictfp", "abstract", "transient", "volatile",
-				"public", "protected", "private", "synchronized", "static", "native");
+		return Sequence(
+				FirstOf("final", "strictfp", "abstract", "transient", "volatile",
+						"public", "protected", "private", "synchronized", "static", "native"),
+				group.basics.testLexBreak());
 	}
 	
 	public Rule keywordModifier() {
 		return Sequence(
-				anyKeyword().label("keyword"),
-				group.basics.testLexBreak(),
-				set(actions.createKeywordModifier(text("keyword"))),
+				anyKeyword(),
+				actions.p(new KeywordModifier().astName(match())),
 				group.basics.optWS());
 	}
 	
-	public Rule typeDeclarationModifiers() {
-		return Sequence(
-				TestNot(Ch('}')),
-				ZeroOrMore(anyModifier().label("modifier")),
-				set(actions.createModifiers(values("ZeroOrMore/modifier"))));
-	}
-	
-	public Rule methodDeclarationModifiers() {
-		return Sequence(
-				TestNot(Ch('}')),
-				ZeroOrMore(anyModifier().label("modifier")),
-				set(actions.createModifiers(values("ZeroOrMore/modifier"))));
-	}
-	
-	public Rule fieldDeclarationModifiers() {
-		return Sequence(
-				TestNot(Ch('}')),
-				ZeroOrMore(anyModifier().label("modifier")),
-				set(actions.createModifiers(values("ZeroOrMore/modifier"))));
-	}
-	
-	public Rule variableDefinitionModifiers() {
-		return Sequence(
-				TestNot(Ch('}')),
-				ZeroOrMore(anyModifier().label("modifier")),
-				set(actions.createModifiers(values("ZeroOrMore/modifier"))));
-	}
-	
-	public Rule anyModifier() {
+	public Rule modifier() {
 		return FirstOf(annotation(), keywordModifier());
+	}
+	
+	public Rule modifiers() {
+		return Sequence(
+				TestNot(Ch('}')),
+				actions.p(new Modifiers()),
+				ZeroOrMore(addModifierToModifiers()));
+	}
+	
+	Rule addModifierToModifiers() {
+		return FirstOf(addAnnotationToModifiers(), addKeywordModifierToModifiers());
+	}
+	
+	Rule addKeywordModifierToModifiers() {
+		return Sequence(
+				keywordModifier(),
+				swap(),
+				push(((Modifiers) pop()).rawKeywords().addToEnd(pop())));
+	}
+	
+	Rule addAnnotationToModifiers() {
+		return Sequence(
+				annotation(),
+				swap(),
+				push(((Modifiers) pop()).rawAnnotations().addToEnd(pop())));
 	}
 	
 	public Rule packageDeclaration() {
@@ -433,7 +591,7 @@ public class StructuresParser extends BaseParser<Node> {
 	}
 	
 	public Rule compilationUnitEoi() {
-		return Sequence(compilationUnit(), Eoi());
+		return Sequence(compilationUnit(), EOI);
 	}
 	
 	public Rule compilationUnit() {

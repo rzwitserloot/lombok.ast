@@ -39,8 +39,10 @@ public class ParserGroup {
 		basics = Parboiled.createParser(BasicsParser.class, this);
 		literals = Parboiled.createParser(LiteralsParser.class, this);
 		types = Parboiled.createParser(TypesParser.class, this);
+		statements = null;
+		structures = null;
 		expressions = Parboiled.createParser(ExpressionsParser.class, this);
-		statements = Parboiled.createParser(StatementsParser.class, this);
-		structures = Parboiled.createParser(StructuresParser.class, this);
+//		statements = Parboiled.createParser(StatementsParser.class, this);
+//		structures = Parboiled.createParser(StructuresParser.class, this);
 	}
 }

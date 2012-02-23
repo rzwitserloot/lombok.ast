@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,13 @@
  */
 package lombok.ast.grammar;
 
+import lombok.ast.BooleanLiteral;
+import lombok.ast.CharLiteral;
+import lombok.ast.FloatingPointLiteral;
+import lombok.ast.IntegralLiteral;
 import lombok.ast.Node;
+import lombok.ast.NullLiteral;
+import lombok.ast.StringLiteral;
 
 import org.parboiled.BaseParser;
 import org.parboiled.Rule;
@@ -29,10 +35,10 @@ import org.parboiled.annotations.SuppressSubnodes;
 
 public class LiteralsParser extends BaseParser<Node> {
 	final ParserGroup group;
-	final LiteralsActions actions;
+	final SourceActions actions;
 	
 	public LiteralsParser(ParserGroup group) {
-		this.actions = new LiteralsActions(group.getSource());
+		this.actions = new SourceActions(group.getSource());
 		this.group = group;
 	}
 	
@@ -50,11 +56,11 @@ public class LiteralsParser extends BaseParser<Node> {
 	 */
 	public Rule nullLiteral() {
 		return Sequence(
-			Sequence(
-					String("null"),
-					group.basics.testLexBreak()),
-			set(actions.createNullLiteral(lastText())),
-			group.basics.optWS());
+				Test(String("null"), group.basics.testLexBreak()),
+				String("null"),
+				actions.p(new NullLiteral().rawValue(match())),
+				actions.endPosByPos(),
+				group.basics.optWS());
 	}
 	
 	/**
@@ -63,7 +69,8 @@ public class LiteralsParser extends BaseParser<Node> {
 	public Rule stringLiteral() {
 		return Sequence(
 				stringLiteralRaw(),
-				set(actions.createStringLiteral(lastText())),
+				actions.p(new StringLiteral().rawValue(match())),
+				actions.endPosByPos(),
 				group.basics.optWS());
 	}
 	
@@ -73,16 +80,17 @@ public class LiteralsParser extends BaseParser<Node> {
 				Ch('"'),
 				ZeroOrMore(FirstOf(
 						stringEscape(),
-						Sequence(TestNot(CharSet("\"\r\n")), Any()))),
+						Sequence(TestNot(AnyOf("\"\r\n")), ANY))),
 				Ch('"'));
 	}
 	
 	Rule stringEscape() {
+		// NB: Preprocessor handles backslash-u escapes.
 		return Sequence(
 				Ch('\\'),
 				FirstOf(
 						Sequence(Optional(CharRange('0', '3')), Optional(CharRange('0', '7')), CharRange('0', '7')),
-						Sequence(TestNot("\r\n"), Any())));
+						Sequence(TestNot("\r\n"), ANY)));
 	}
 	
 	/**
@@ -96,10 +104,11 @@ public class LiteralsParser extends BaseParser<Node> {
 								Sequence(escapedSequence(), Ch('\'')),
 								Sequence(
 										ZeroOrMore(Sequence(TestNot(
-												FirstOf(Ch('\''), group.basics.lineTerminator())), Any())),
+												FirstOf(Ch('\''), group.basics.lineTerminator())), ANY)),
 										Ch('\'')),
-								Any())),
-				set(actions.createCharLiteral(lastText())),
+								ANY)),
+				actions.p(new CharLiteral().rawValue(match())),
+				actions.endPosByPos(),
 				group.basics.optWS());
 	}
 	
@@ -110,7 +119,7 @@ public class LiteralsParser extends BaseParser<Node> {
 		return Sequence(Ch('\\'),
 				FirstOf(
 						Sequence(Optional(zeroToThree()), octalDigit(), Optional(octalDigit())),
-						Any()));
+						ANY));
 	}
 	
 	Rule zeroToThree() {
@@ -129,7 +138,8 @@ public class LiteralsParser extends BaseParser<Node> {
 				Sequence(
 						FirstOf(String("true"), String("false")),
 						group.basics.testLexBreak()),
-				set(actions.createBooleanLiteral(lastText())),
+				actions.p(new BooleanLiteral().rawValue(match())),
+				actions.endPosByPos(),
 				group.basics.optWS());
 	}
 	
@@ -141,7 +151,6 @@ public class LiteralsParser extends BaseParser<Node> {
 		return Sequence(
 				Test(Sequence(Optional(Ch('.')), CharRange('0', '9'))),
 				FirstOf(hexLiteral(), fpLiteral()),
-				set(lastValue()),
 				group.basics.optWS());
 	}
 	
@@ -157,26 +166,27 @@ public class LiteralsParser extends BaseParser<Node> {
 								Sequence(Ch('.'), OneOrMore(digit()))),
 						Optional(
 								Sequence(
-										CharIgnoreCase('e'),
+										IgnoreCase('e'),
 										Optional(FirstOf(Ch('+'), Ch('-'))),
 										OneOrMore(digit()))),
 						numberTypeSuffix()),
-				set(actions.createNumberLiteral(lastText())));
-	}
+				actions.p(new FloatingPointLiteral().rawValue(match())),
+				actions.endPosByPos());
+		}
 	
 	/**
 	 * @see <a href="http://java.sun.com/docs/books/jls/third_edition/html/lexical.html#3.10.1">JLS section 3.10.1</a>
 	 * @see <a href="http://java.sun.com/docs/books/jls/third_edition/html/lexical.html#3.10.2">JLS section 3.10.2</a>
 	 */
 	Rule hexLiteral() {
-		return Sequence(
+		return FirstOf(
+				hexFP(),
 				Sequence(
-						Sequence(Ch('0'), CharIgnoreCase('x')),
-						FirstOf(
-								hexFP(),
-								Sequence(OneOrMore(hexDigit()), numberTypeSuffix())
-								)),
-				set(actions.createNumberLiteral(lastText())));
+						Sequence(
+								Ch('0'), IgnoreCase('x'),
+								Sequence(OneOrMore(hexDigit()), numberTypeSuffix())),
+						actions.p(new IntegralLiteral().rawValue(match())),
+						actions.endPosByPos()));
 	}
 	
 	/**
@@ -184,20 +194,24 @@ public class LiteralsParser extends BaseParser<Node> {
 	 */
 	Rule hexFP() {
 		return Sequence(
-				FirstOf(
-						Sequence(Ch('.'), OneOrMore(hexDigit())),
-						Sequence(
-								OneOrMore(hexDigit()),
-								Optional(Sequence(Ch('.'), ZeroOrMore(hexDigit()))))),
 				Sequence(
-						CharIgnoreCase('p'),
-						Optional(FirstOf(Ch('+'), Ch('-'))),
-						OneOrMore(digit())),
-				numberTypeSuffix());
+						Ch('0'), IgnoreCase('x'),
+						FirstOf(
+								Sequence(Ch('.'), OneOrMore(hexDigit())),
+								Sequence(
+										OneOrMore(hexDigit()),
+										Optional(Sequence(Ch('.'), ZeroOrMore(hexDigit()))))),
+						Sequence(
+								IgnoreCase('p'),
+								Optional(FirstOf(Ch('+'), Ch('-'))),
+								OneOrMore(digit())),
+						numberTypeSuffix()),
+				actions.p(new FloatingPointLiteral().rawValue(match())),
+				actions.endPosByPos());
 	}
 	
 	Rule numberTypeSuffix() {
-		return Optional(FirstOf(CharIgnoreCase('d'), CharIgnoreCase('f'), CharIgnoreCase('l')));
+		return Optional(FirstOf(IgnoreCase('d'), IgnoreCase('f'), IgnoreCase('l')));
 	}
 	
 	Rule digit() {
@@ -206,6 +220,6 @@ public class LiteralsParser extends BaseParser<Node> {
 	
 	Rule hexDigit() {
 		return FirstOf(digit(),
-				CharIgnoreCase('a'), CharIgnoreCase('b'), CharIgnoreCase('c'), CharIgnoreCase('d'), CharIgnoreCase('e'), CharIgnoreCase('f'));
+				IgnoreCase('a'), IgnoreCase('b'), IgnoreCase('c'), IgnoreCase('d'), IgnoreCase('e'), IgnoreCase('f'));
 	}
 }

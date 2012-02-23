@@ -40,6 +40,7 @@ public interface TypeDeclaration extends Node, DescribedNode, JavadocContainer {
 	
 	@ParentAccessor TypeBody astBody();
 	Node rawBody();
+	TypeDeclaration rawBody(Node body);
 	
 	CompilationUnit upIfTopLevelToCompilationUnit();
 	Block upToBlock();

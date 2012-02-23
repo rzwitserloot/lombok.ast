@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -34,6 +34,7 @@ import java.util.List;
 
 import lombok.Cleanup;
 import lombok.ast.grammar.RunForEachFileInDirRunner.DirDescriptor;
+import lombok.ast.grammar.parboiledExample.ParboiledJavaParser;
 
 import org.eclipse.jdt.internal.compiler.CompilationResult;
 import org.eclipse.jdt.internal.compiler.DefaultErrorHandlingPolicies;
@@ -48,7 +49,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.parboiled.Parboiled;
-import org.parboiled.ReportingParseRunner;
+import org.parboiled.parserunners.ReportingParseRunner;
 
 import com.google.common.collect.Lists;
 import com.sun.tools.javac.main.JavaCompiler;
@@ -183,8 +184,8 @@ public class PerformanceTest extends RunForEachFileInDirRunner.SourceFileBasedTe
 	
 	private void parseWithParboiled(Source source) {
 		if (VERBOSE) {
-			ParboiledJavaGrammar parser = Parboiled.createParser(ParboiledJavaGrammar.class);
-			ReportingParseRunner.run(parser.CompilationUnit(), source.getRawInput());
+			ParboiledJavaParser parser = Parboiled.createParser(ParboiledJavaParser.class);
+			new ReportingParseRunner<Object>(parser.CompilationUnit()).run(source.getRawInput());
 		}
 	}
 	
