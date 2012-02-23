@@ -31,6 +31,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import lombok.Getter;
+import lombok.ast.grammar.SourceStructure;
 import lombok.ast.printer.SourcePrinter;
 import lombok.ast.printer.TextFormatter;
 
@@ -41,6 +42,7 @@ abstract class AbstractNode implements Node {
 	private Map<String, Position> conversionPositions;
 	private Map<MessageKey, Message> messagesMap;
 	private List<Message> messages;
+	private List<SourceStructure> sourceStructures;
 	
 	@Override public boolean isGenerated() {
 		return position.getGeneratedBy() != null;
@@ -152,6 +154,20 @@ abstract class AbstractNode implements Node {
 	
 	List<Node> getDanglingNodes() {
 		return danglings == null ? Collections.<Node>emptyList() : Collections.unmodifiableList(danglings);
+	}
+	
+	void addSourceStructure(SourceStructure structure) {
+		if (structure == null) return;
+		if (sourceStructures == null) sourceStructures = Lists.newArrayList();
+		sourceStructures.add(structure);
+	}
+	
+	void removeSourceStructure(SourceStructure structure) {
+		if (sourceStructures != null) sourceStructures.remove(sourceStructures);
+	}
+	
+	List<SourceStructure> getSourceStructures() {
+		return sourceStructures == null ? Collections.<SourceStructure>emptyList() : Collections.unmodifiableList(sourceStructures);
 	}
 	
 	void addConversionPositionInfo(String key, Position position) {
