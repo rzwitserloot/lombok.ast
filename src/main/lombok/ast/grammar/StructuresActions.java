@@ -188,6 +188,25 @@ public class StructuresActions extends SourceActions {
 		return true;
 	}
 	
+	public boolean incrementVarDefEntryDimensions() {
+		Node top = peek();
+		if (top instanceof VariableDefinitionEntry) {
+			VariableDefinitionEntry vde = (VariableDefinitionEntry) top;
+			vde.astArrayDimensions(vde.astArrayDimensions() + 1);
+		}
+		return true;
+	}
+	
+	public boolean setModifiersOnVarDef(Modifiers modifiers, Node varDef) {
+		if (varDef instanceof VariableDefinition) {
+			((VariableDefinition) varDef).astModifiers(modifiers);
+			varDef.setPosition(varDef.getPosition().withStart(modifiers.getPosition().getStart()));
+		} else {
+			DanglingNodes.addDanglingNode(varDef, modifiers);
+		}
+		return true;
+	}
+	
 	// -----
 	public Node createMethodArguments(Node head, List<Node> tail) {
 		MethodArguments ma = new MethodArguments();
@@ -287,14 +306,6 @@ public class StructuresActions extends SourceActions {
 		if (varargs != null && !varargs.trim().isEmpty()) decl.astVarargs(true);
 		decl.rawVariables().addToEnd(e);
 		return posify(decl);
-	}
-	
-	public Node createInstanceInitializer(Node body) {
-		return posify(new InstanceInitializer().rawBody(body));
-	}
-	
-	public Node createStaticInitializer(Node body) {
-		return posify(new StaticInitializer().rawBody(body));
 	}
 	
 	public Node createFieldDeclaration(Node variableDefinition, Node modifiers) {

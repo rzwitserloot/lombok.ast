@@ -21,7 +21,9 @@
  */
 package lombok.ast.grammar;
 
+import lombok.ast.Annotation;
 import lombok.ast.AnnotationDeclaration;
+import lombok.ast.AnnotationElement;
 import lombok.ast.AnnotationMethodDeclaration;
 import lombok.ast.ClassDeclaration;
 import lombok.ast.ConstructorDeclaration;
@@ -31,14 +33,19 @@ import lombok.ast.EnumDeclaration;
 import lombok.ast.EnumTypeBody;
 import lombok.ast.ExecutableDeclaration;
 import lombok.ast.Identifier;
+import lombok.ast.InstanceInitializer;
 import lombok.ast.InterfaceDeclaration;
 import lombok.ast.KeywordModifier;
 import lombok.ast.MethodDeclaration;
 import lombok.ast.Modifiers;
 import lombok.ast.Node;
 import lombok.ast.NormalTypeBody;
+import lombok.ast.StaticInitializer;
 import lombok.ast.TypeBody;
 import lombok.ast.TypeDeclaration;
+import lombok.ast.VariableDeclaration;
+import lombok.ast.VariableDefinition;
+import lombok.ast.VariableDefinitionEntry;
 
 import org.parboiled.BaseParser;
 import org.parboiled.Rule;
@@ -414,33 +421,69 @@ public class StructuresParser extends BaseParser<Node> {
 	
 	Rule methodParameter() {
 		return Sequence(
-				modifiers(),
+				actions.p(new VariableDefinition()),
+				swap(),
+				push(((VariableDefinition) pop()).astModifiers((Modifiers) pop())),
 				group.types.type(),
-				Optional(Sequence(String("..."), group.basics.optWS())).label("varargs"),
+				swap(),
+				push(((VariableDefinition) pop()).rawTypeReference(pop())),
+				Optional(
+						String("..."), actions.structure(),
+						group.basics.optWS(),
+						push(((VariableDefinition) pop()).astVarargs(true))),
 				group.basics.identifier().label("name"),
-				ZeroOrMore(Sequence(Ch('[').label("open"), group.basics.optWS(), Ch(']').label("closed"), group.basics.optWS()).label("dim")).label("dims"),
-				set(actions.createMethodParameter(value("modifiers"), value("type"), text("varargs"), value("name"), nodes("dims/dim/open"), nodes("dims/dim/closed"))));
+				actions.turnToIdentifier(),
+				push(new VariableDefinitionEntry()),
+				actions.startPosByNode(),
+				swap(),
+				actions.endPosByNode(),
+				push(((VariableDefinitionEntry) pop()).astName((Identifier) pop())),
+				ZeroOrMore(
+						Ch('['), actions.structure(),
+						group.basics.optWS(),
+						Ch(']'), actions.structure(),
+						actions.endPosByPos(),
+						actions.incrementVarDefEntryDimensions()),
+				actions.endPosByNode(),
+				swap(),
+				push(((VariableDefinition) pop()).rawVariables().addToEnd(pop())));
 	}
 	
 	public Rule instanceInitializer() {
 		return Sequence(
 				group.statements.blockStatement().label("initializer"),
-				set(actions.createInstanceInitializer(value("initializer"))));
+				actions.p(new InstanceInitializer()),
+				swap(), actions.endPosByNode(), swap(),
+				push(((InstanceInitializer) pop()).rawBody(pop())));
 	}
 	
 	public Rule staticInitializer() {
 		return Sequence(
-				String("static"), group.basics.testLexBreak(), group.basics.optWS(),
+				Test(String("static"), group.basics.testLexBreak()),
+				actions.p(new StaticInitializer()),
+				String("static"), actions.structure(),
+				group.basics.optWS(),
 				group.statements.blockStatement().label("initializer"),
-				set(actions.createStaticInitializer(value("initializer"))));
+				actions.endPosByNode(), swap(),
+				push(((StaticInitializer) pop()).rawBody(pop())));
 	}
 	
 	public Rule fieldDeclaration() {
+		return variableDeclaration();
+	}
+	
+	Rule variableDeclaration() {
 		return Sequence(
-				fieldDeclarationModifiers().label("modifiers"),
-				variableDefinition(), set(), set(actions.posify(value())),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createFieldDeclaration(value(), value("modifiers"))));
+				modifiers(),
+				variableDefinition(),
+				swap(),
+				actions.setModifiersOnVarDef((Modifiers) pop(), peek()),
+				actions.p(new VariableDeclaration()),
+				swap(), actions.endPosByPos(), swap(),
+				push(((VariableDeclaration) pop()).rawDefinition(pop())),
+				Ch(';'), actions.structure(),
+				actions.endPosByPos(),
+				group.basics.optWS());
 	}
 	
 	/**
@@ -448,42 +491,64 @@ public class StructuresParser extends BaseParser<Node> {
 	 */
 	Rule variableDefinition() {
 		return Sequence(
-				group.types.type().label("type"),
-				variableDefinitionPart().label("head"),
-				ZeroOrMore(Sequence(
-						Ch(','), group.basics.optWS(),
-						variableDefinitionPart()).label("tail")),
-				set(actions.createVariableDefinition(value("type"), value("head"), values("ZeroOrMore/tail"))));
+				actions.p(new VariableDefinition()),
+				group.types.type(),
+				swap(),
+				push(((VariableDefinition) pop()).rawTypeReference(pop())),
+				variableDefinitionPart(),
+				actions.endPosByNode(),
+				swap(),
+				push(((VariableDefinition) pop()).rawVariables().addToEnd(pop())),
+				ZeroOrMore(
+						Ch(','), actions.structure(), group.basics.optWS(),
+						variableDefinitionPart(),
+						actions.endPosByNode(),
+						swap(),
+						push(((VariableDefinition) pop()).rawVariables().addToEnd(pop()))));
 	}
 	
 	Rule variableDefinitionPartNoAssign() {
 		return Sequence(
+				actions.p(new VariableDefinitionEntry()),
 				group.basics.identifier().label("varName"),
-				ZeroOrMore(Sequence(Ch('['), group.basics.optWS(), Ch(']'), group.basics.optWS()).label("dim")).label("dims"),
-				set(actions.createVariableDefinitionPart(value("varName"), texts("dims/dim"), null)));
+				actions.turnToIdentifier(),
+				actions.endPosByNode(),
+				swap(),
+				push(((VariableDefinitionEntry) pop()).astName((Identifier) pop())),
+				ZeroOrMore(
+						Ch('['), actions.structure(), group.basics.optWS(),
+						Ch(']'), actions.structure(), actions.endPosByPos(), group.basics.optWS(),
+						actions.incrementVarDefEntryDimensions()));
 	}
 	
 	Rule variableDefinitionPart() {
 		return Sequence(
-				group.basics.identifier().label("varName"),
-				ZeroOrMore(Sequence(Ch('['), group.basics.optWS(), Ch(']'), group.basics.optWS()).label("dim")).label("dims"),
-				Optional(Sequence(
-						Ch('='), group.basics.optWS(),
+				variableDefinitionPartNoAssign(),
+				Optional(
+						Ch('='), actions.structure(), group.basics.optWS(),
 						FirstOf(
 								group.expressions.arrayInitializer(),
-								group.expressions.anyExpression()))).label("initializer"),
-				set(actions.createVariableDefinitionPart(value("varName"), texts("dims/dim"), value("initializer"))));
+								group.expressions.anyExpression()).label("initializer"),
+						actions.endPosByNode(),
+						swap(),
+						push(((VariableDefinitionEntry) pop()).rawInitializer(pop()))));
 	}
 	
 	public Rule annotation() {
 		return Sequence(
-				Ch('@'), group.basics.optWS(),
+				Test('@'),
+				actions.p(new Annotation()),
+				Ch('@'), actions.structure(), group.basics.optWS(),
 				group.types.plainReferenceType().label("annotationType"),
-				Optional(Sequence(
+				actions.endPosByNode(), swap(),
+				push(((Annotation) pop()).rawAnnotationTypeReference(pop())),
+				Optional(
 						Ch('('), group.basics.optWS(),
-						Optional(FirstOf(
-								annotationElements(),
-								Sequence(annotationElementValue(),
+						Optional(
+								FirstOf(
+										annotationElements(),
+										Sequence(
+												annotationElementValue(),
 										set(actions.createAnnotationFromElement(lastValue()))))),
 						Ch(')'), group.basics.optWS())).label("content"),
 				set(actions.createAnnotation(value("annotationType"), value("content"))));
@@ -491,19 +556,27 @@ public class StructuresParser extends BaseParser<Node> {
 	
 	Rule annotationElements() {
 		return Sequence(
-				annotationElement().label("head"),
-				ZeroOrMore(Sequence(
-						Ch(','), group.basics.optWS(),
-						annotationElement()).label("tail")),
-				set(actions.createAnnotationFromElements(value("head"), values("ZeroOrMore/tail"))));
+				annotationElement(),
+				swap(),
+				push(((Annotation) pop()).rawElements().addToEnd(pop())),
+				ZeroOrMore(
+						Ch(','), actions.structure(), group.basics.optWS(),
+						annotationElement(),
+						swap(),
+						push(((Annotation) pop()).rawElements().addToEnd(pop()))));
 	}
 	
 	Rule annotationElement() {
 		return Sequence(
+				actions.p(new AnnotationElement()),
 				group.basics.identifier().label("name"),
-				Ch('='), group.basics.optWS(),
-				annotationElementValue().label("value"),
-				set(actions.createAnnotationElement(value("name"), value("value"))));
+				actions.turnToIdentifier(),
+				swap(),
+				push(((AnnotationElement) pop()).astName((Identifier) pop())),
+				Ch('='), actions.structure(), group.basics.optWS(),
+				annotationElementValue(),
+				actions.endPosByNode(), swap(),
+				push(((AnnotationElement) pop()).rawValue(pop())));
 	}
 	
 	Rule annotationElementValue() {
