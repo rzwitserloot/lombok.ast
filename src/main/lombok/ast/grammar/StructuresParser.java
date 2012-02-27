@@ -26,6 +26,7 @@ import lombok.ast.AnnotationDeclaration;
 import lombok.ast.AnnotationElement;
 import lombok.ast.AnnotationMethodDeclaration;
 import lombok.ast.ClassDeclaration;
+import lombok.ast.CompilationUnit;
 import lombok.ast.ConstructorDeclaration;
 import lombok.ast.EmptyDeclaration;
 import lombok.ast.EnumConstant;
@@ -33,6 +34,7 @@ import lombok.ast.EnumDeclaration;
 import lombok.ast.EnumTypeBody;
 import lombok.ast.ExecutableDeclaration;
 import lombok.ast.Identifier;
+import lombok.ast.ImportDeclaration;
 import lombok.ast.InstanceInitializer;
 import lombok.ast.InterfaceDeclaration;
 import lombok.ast.KeywordModifier;
@@ -40,6 +42,7 @@ import lombok.ast.MethodDeclaration;
 import lombok.ast.Modifiers;
 import lombok.ast.Node;
 import lombok.ast.NormalTypeBody;
+import lombok.ast.PackageDeclaration;
 import lombok.ast.StaticInitializer;
 import lombok.ast.TypeBody;
 import lombok.ast.TypeDeclaration;
@@ -549,9 +552,13 @@ public class StructuresParser extends BaseParser<Node> {
 										annotationElements(),
 										Sequence(
 												annotationElementValue(),
-										set(actions.createAnnotationFromElement(lastValue()))))),
-						Ch(')'), group.basics.optWS())).label("content"),
-				set(actions.createAnnotation(value("annotationType"), value("content"))));
+												push(new AnnotationElement()),
+												actions.startPosByNode(),
+												swap(), actions.endPosByNode(),
+												swap(), push(((AnnotationElement) pop()).rawValue(pop())),
+												swap(), push(((Annotation) pop()).rawElements().addToEnd(pop()))))),
+						Ch(')'), actions.endPosByPos(),
+						group.basics.optWS()));
 	}
 	
 	Rule annotationElements() {
@@ -582,16 +589,7 @@ public class StructuresParser extends BaseParser<Node> {
 	Rule annotationElementValue() {
 		return FirstOf(
 				annotation(),
-				Sequence(
-						Ch('{'), group.basics.optWS(),
-						Optional(Sequence(
-								annotationElementValue().label("head"),
-								ZeroOrMore(Sequence(
-										Ch(','), group.basics.optWS(),
-										annotationElementValue()).label("tail")),
-								Optional(Sequence(Ch(','), group.basics.optWS())))),
-						Ch('}'), group.basics.optWS(),
-						set(actions.createAnnotationElementValueArrayInitializer(value("Optional/Sequence/head"), values("Optional/Sequence/ZeroOrMore/tail")))),
+				group.expressions.arrayInitializerInternal(FirstOf(annotation(), group.expressions.inlineIfExpressionChaining())),
 				group.expressions.inlineIfExpressionChaining());
 	}
 	
@@ -641,26 +639,44 @@ public class StructuresParser extends BaseParser<Node> {
 	
 	public Rule packageDeclaration() {
 		return Sequence(
-				Sequence(
-						ZeroOrMore(annotation().label("annotation")).label("annotations"),
-						String("package"), group.basics.testLexBreak(), group.basics.optWS()),
-				group.basics.identifier().label("head"),
-				ZeroOrMore(group.basics.dotIdentifier().label("tail")),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createPackageDeclaration(values("Sequence/annotations/annotation"), value("head"), values("ZeroOrMore/tail"))));
+				actions.p(new PackageDeclaration()),
+				ZeroOrMore(
+						annotation(),
+						swap(),
+						push(((PackageDeclaration) pop()).rawAnnotations().addToEnd(pop()))),
+				String("package"), actions.structure(), group.basics.testLexBreak(), group.basics.optWS(),
+				group.basics.identifier(),
+				swap(),
+				push(((PackageDeclaration) pop()).rawParts().addToEnd(pop())),
+				ZeroOrMore(
+						group.basics.dotIdentifier(),
+						swap(),
+						push(((PackageDeclaration) pop()).rawParts().addToEnd(pop()))),
+				Ch(';'), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	public Rule importDeclaration() {
 		return Sequence(
-				Sequence(String("import"), group.basics.testLexBreak(), group.basics.optWS()),
-				Optional(Sequence(String("static"), group.basics.testLexBreak(), group.basics.optWS())).label("static"),
-				group.basics.identifier().label("head"),
-				ZeroOrMore(group.basics.dotIdentifier().label("tail")),
-				Optional(Sequence(
-						Ch('.'), group.basics.optWS(),
-						Ch('*'), group.basics.optWS())).label("dotStar"),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createImportDeclaration(text("static"), value("head"), values("ZeroOrMore/tail"), text("dotStar"))));
+				Test(String("import"), group.basics.testLexBreak()),
+				actions.p(new ImportDeclaration()),
+				String("import"), actions.structure(), group.basics.optWS(),
+				Optional(
+						String("static"), group.basics.testLexBreak(), group.basics.optWS(),
+						push(((ImportDeclaration) pop()).astStaticImport(true))),
+				group.basics.identifier(),
+				swap(),
+				push(((ImportDeclaration) pop()).rawParts().addToEnd(pop())),
+				ZeroOrMore(
+						group.basics.dotIdentifier(),
+						swap(),
+						push(((PackageDeclaration) pop()).rawParts().addToEnd(pop()))),
+				Optional(
+						Test(Ch('.'), group.basics.optWS(), Ch('*')),
+						Ch('.'), actions.structure(),
+						group.basics.optWS(),
+						Ch('*'), actions.structure(),
+						push(((ImportDeclaration) pop()).astStarImport(true))),
+				Ch(';'), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	public Rule compilationUnitEoi() {
@@ -669,10 +685,16 @@ public class StructuresParser extends BaseParser<Node> {
 	
 	public Rule compilationUnit() {
 		return Sequence(
+				actions.p(new CompilationUnit()),
 				group.basics.optWS(),
-				Optional(packageDeclaration()).label("package"),
-				ZeroOrMore(importDeclaration().label("import")).label("imports"),
-				ZeroOrMore(anyTypeDeclaration().label("type")).label("types"),
-				set(actions.createCompilationUnit(value("package"), values("imports/import"), values("types/type"))));
+				Optional(
+						packageDeclaration(), actions.endPosByNode(), swap(),
+						push(((CompilationUnit) pop()).rawPackageDeclaration(pop()))),
+				ZeroOrMore(
+						importDeclaration(), actions.endPosByNode(), swap(),
+						push(((CompilationUnit) pop()).rawImportDeclarations().addToEnd(pop()))),
+				ZeroOrMore(
+						anyTypeDeclaration(), actions.endPosByNode(), swap(),
+						push(((CompilationUnit) pop()).rawTypeDeclarations().addToEnd(pop()))));
 	}
 }

@@ -74,7 +74,7 @@ public class BasicsParser extends BaseParser<Node> {
 	
 	public Rule dotIdentifier() {
 		return Sequence(
-				Ch('.'), optWS(),
+				Ch('.'), actions.structure(), optWS(),
 				identifierRaw().label("identifier"),
 				actions.checkIfKeyword(match()),
 				push(actions.createIdentifier(match(), matchStart(), matchEnd())),

@@ -193,17 +193,21 @@ public class ExpressionsParser extends BaseParser<Node> {
 	}
 	
 	public Rule arrayInitializer() {
+		return arrayInitializerInternal(FirstOf(arrayInitializer(), anyExpression()));
+	}
+	
+	Rule arrayInitializerInternal(Rule element) {
 		return Sequence(
 				Test(Ch('{')),
 				actions.p(new ArrayInitializer()),
 				Ch('{'), actions.structure(),
 				group.basics.optWS(),
 				Optional(
-						FirstOf(arrayInitializer(), anyExpression()).label("head"),
+						element.label("head"),
 						swap(), push(((ArrayInitializer) pop()).rawExpressions().addToEnd(pop())),
 						ZeroOrMore(
 								Ch(','), group.basics.optWS(),
-								FirstOf(arrayInitializer(), anyExpression()).label("tail"),
+								element.label("tail"),
 								swap(), push(((ArrayInitializer) pop()).rawExpressions().addToEnd(pop()))),
 						Optional(Ch(','), group.basics.optWS())),
 				Ch('}'), actions.endPosByPos(), group.basics.optWS());

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,34 @@
  */
 package lombok.ast.grammar;
 
+import lombok.ast.AlternateConstructorInvocation;
+import lombok.ast.Assert;
+import lombok.ast.Block;
+import lombok.ast.Break;
+import lombok.ast.Case;
+import lombok.ast.Catch;
+import lombok.ast.Continue;
+import lombok.ast.Default;
+import lombok.ast.DoWhile;
+import lombok.ast.EmptyStatement;
+import lombok.ast.ExpressionStatement;
+import lombok.ast.For;
+import lombok.ast.ForEach;
+import lombok.ast.Identifier;
+import lombok.ast.If;
+import lombok.ast.LabelledStatement;
+import lombok.ast.Modifiers;
 import lombok.ast.Node;
+import lombok.ast.Return;
+import lombok.ast.SuperConstructorInvocation;
+import lombok.ast.Switch;
+import lombok.ast.Synchronized;
+import lombok.ast.Throw;
+import lombok.ast.Try;
+import lombok.ast.VariableDeclaration;
+import lombok.ast.VariableDefinition;
+import lombok.ast.VariableDefinitionEntry;
+import lombok.ast.While;
 
 import org.parboiled.BaseParser;
 import org.parboiled.Rule;
@@ -38,7 +65,29 @@ public class StatementsParser extends BaseParser<Node> {
 	public Rule anyStatement() {
 		return Sequence(
 				TestNot(Ch('}')),
-				labelledStatement());
+				explicitlyLabelledStatement(),
+				blockStatement(),
+				localClassDeclaration(),
+				localVariableDeclaration(),
+				emptyStatement(),
+				expressionStatement(),
+				ifStatement(),
+				assertStatement(),
+				switchStatement(),
+				caseStatement(),
+				defaultStatement(),
+				whileStatement(),
+				doWhileStatement(),
+				basicForStatement(),
+				enhancedForStatement(),
+				breakStatement(),
+				continueStatement(),
+				returnStatement(),
+				synchronizedStatement(),
+				throwStatement(),
+				tryStatement(),
+				explicitAlternateConstructorInvocation(),
+				explicitSuperConstructorInvocation());
 	}
 	
 	/**
@@ -46,10 +95,16 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule blockStatement() {
 		return Sequence(
-				Ch('{'), group.basics.optWS(),
-				ZeroOrMore(anyStatement().label("statement")),
-				Ch('}'), group.basics.optWS(),
-				set(actions.createBlock(values("ZeroOrMore/statement"))));
+				Test(Ch('{')),
+				actions.p(new Block()),
+				Ch('{'), actions.structure(), group.basics.optWS(),
+				ZeroOrMore(
+						anyStatement(),
+						actions.endPosByNode(),
+						swap(),
+						push(((Block) pop()).rawContents().addToEnd(pop()))),
+				Ch('}'), actions.structure(),
+				actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -64,35 +119,50 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule variableDefinition() {
 		return Sequence(
-				group.structures.variableDefinitionModifiers().label("modifiers"),
-				group.structures.variableDefinition(), set(), set(actions.posify(value())),
-				set(actions.addLocalVariableModifiers(value(), value("modifiers"))));
+				group.structures.modifiers(),
+				group.structures.variableDefinition(),
+				swap(),
+				actions.setModifiersOnVarDef((Modifiers) pop(), peek()));
 	}
 	
 	public Rule localVariableDeclaration() {
 		return Sequence(
-				variableDefinition().label("definition"),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createVariableDeclaration(value("definition"))));
+				variableDefinition(),
+				Test(Ch(';')),
+				actions.p(new VariableDeclaration()),
+				actions.startPosByNode(),
+				push(((VariableDeclaration) pop()).rawDefinition(pop())),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	public Rule explicitAlternateConstructorInvocation() {
 		return Sequence(
-				group.types.typeArguments().label("typeArgs"),
-				String("this"), group.basics.testLexBreak(), group.basics.optWS(),
-				group.structures.methodArguments().label("arguments"),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createAlternateConstructorInvocation(value("typeArgs"), value("arguments"))));
+				group.types.typeArguments(),
+				Test(String("this"), group.basics.testLexBreak()),
+				actions.p(new AlternateConstructorInvocation()),
+				swap(),
+				actions.addTypeArgsToAlternateConstructorInvocation(peek(1), pop()),
+				String("this"), actions.structure(), group.basics.optWS(),
+				group.structures.methodArguments(),
+				actions.addArgsToAlternateConstructorInvocation(peek(1), pop()),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	public Rule explicitSuperConstructorInvocation() {
 		return Sequence(
-				Optional(Sequence(group.expressions.allPrimaryExpressions(), Ch('.').label("dot"), group.basics.optWS())).label("qualifier"),
-				group.types.typeArguments().label("typeArgs"),
-				String("super"), group.basics.testLexBreak(), group.basics.optWS(),
-				group.structures.methodArguments().label("arguments"),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createSuperConstructorInvocation(node("qualifier/Sequence/dot"), value("qualifier"), value("typeArgs"), value("arguments"))));
+				actions.p(new SuperConstructorInvocation()),
+				Optional(
+						group.expressions.allPrimaryExpressions(),
+						swap(),
+						push(((SuperConstructorInvocation) pop()).rawQualifier(pop())),
+						Ch('.'), actions.structure(), group.basics.optWS()),
+				group.types.typeArguments(),
+				Test(String("super"), group.basics.testLexBreak()),
+				actions.addTypeArgsToSuperConstructorInvocation(peek(1), pop()),
+				String("super"), actions.structure(), group.basics.optWS(),
+				group.structures.methodArguments(),
+				actions.addArgsToSuperConstructorInvocation(peek(1), pop()),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -101,8 +171,8 @@ public class StatementsParser extends BaseParser<Node> {
 	Rule emptyStatement() {
 		return Sequence(
 				Ch(';'),
-				group.basics.optWS(),
-				set(actions.createEmptyStatement()));
+				actions.p(new EmptyStatement()),
+				group.basics.optWS());
 	}
 	
 	/**
@@ -111,37 +181,18 @@ public class StatementsParser extends BaseParser<Node> {
 	 * 
 	 * @see <a href="http://java.sun.com/docs/books/jls/third_edition/html/statements.html#14.7">JLS section 14.7</a>
 	 */
-	public Rule labelledStatement() {
+	public Rule explicitlyLabelledStatement() {
 		return Sequence(
-				ZeroOrMore(Sequence(
-						group.basics.identifier().label("labelName"),
-						Ch(':'),
-						group.basics.optWS())),
-				FirstOf(
-						blockStatement(),
-						localClassDeclaration(),
-						localVariableDeclaration(),
-						emptyStatement(),
-						expressionStatement(),
-						ifStatement(),
-						assertStatement(),
-						switchStatement(),
-						caseStatement(),
-						defaultStatement(),
-						whileStatement(),
-						doWhileStatement(),
-						basicForStatement(),
-						enhancedForStatement(),
-						breakStatement(),
-						continueStatement(),
-						returnStatement(),
-						synchronizedStatement(),
-						throwStatement(),
-						tryStatement(),
-						explicitAlternateConstructorInvocation(),
-						explicitSuperConstructorInvocation()
-				).label("statement"),
-				set(actions.createLabelledStatement(values("ZeroOrMore/Sequence/labelName"), value("statement"))));
+				group.basics.identifier(),
+				actions.turnToIdentifier(),
+				Test(Ch(':')),
+				actions.p(new LabelledStatement()),
+				Ch(':'), actions.structure(), group.basics.optWS(),
+				push(((LabelledStatement) pop()).astLabel((Identifier) pop())),
+				anyStatement(),
+				actions.endPosByNode(),
+				swap(),
+				push(((LabelledStatement) pop()).rawStatement(pop())));
 	}
 	
 	/**
@@ -149,9 +200,10 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule expressionStatement() {
 		return Sequence(
-				group.expressions.statementExpression().label("expression"),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createExpressionStatement(value("expression"))));
+				group.expressions.anyExpression(),
+				Test(Ch(';')),
+				actions.p(new ExpressionStatement().rawExpression(pop())),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -159,15 +211,24 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule ifStatement() {
 		return Sequence(
-				String("if"), group.basics.testLexBreak(), group.basics.optWS(),
-				Ch('('), group.basics.optWS(),
+				Test(String("if"), group.basics.testLexBreak()),
+				actions.p(new If()),
+				String("if"), actions.structure(), group.basics.optWS(),
+				Ch('('), actions.structure(), group.basics.optWS(),
 				group.expressions.anyExpression().label("condition"),
-				Ch(')'), group.basics.optWS(),
-				anyStatement(), set(),
-				Optional(Sequence(
-						String("else"), group.basics.testLexBreak(), group.basics.optWS(),
-						anyStatement()).label("else")),
-				set(actions.createIfStatement(value("condition"), value(), value("Optional/else"))));
+				swap(),
+				push(((If) pop()).rawCondition(pop())),
+				Ch(')'), actions.structure(), group.basics.optWS(),
+				anyStatement().label("statement"),
+				actions.endPosByNode(),
+				swap(),
+				push(((If) pop()).rawStatement(pop())),
+				Optional(
+						Test(String("else"), group.basics.testLexBreak()),
+						String("else"), actions.structure(), group.basics.optWS(),
+						anyStatement().label("else"),
+						actions.endPosByNode(),
+						push(((If) pop()).rawElseStatement(pop()))));
 	}
 	
 	/**
@@ -175,14 +236,20 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule assertStatement() {
 		return Sequence(
-				String("assert"), group.basics.testLexBreak(), group.basics.optWS(),
+				Test(String("assert"), group.basics.testLexBreak()),
+				actions.p(new Assert()),
+				String("assert"), actions.structure(), group.basics.optWS(),
 				group.expressions.anyExpression(),
-				set(),
-				Optional(Sequence(
-						Ch(':'), group.basics.optWS(),
-						group.expressions.anyExpression(), set())),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createAssertStatement(value(), value("Optional/Sequence"))));
+				actions.endPosByNode(),
+				swap(),
+				push(((Assert) pop()).rawAssertion(pop())),
+				Optional(
+						Ch(':'), actions.structure(), group.basics.optWS(),
+						group.expressions.anyExpression(),
+						actions.endPosByNode(),
+						swap(),
+						push(((Assert) pop()).rawMessage(pop()))),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -190,12 +257,18 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule switchStatement() {
 		return Sequence(
-				String("switch"), group.basics.testLexBreak(), group.basics.optWS(),
-				Ch('('), group.basics.optWS(),
-				group.expressions.anyExpression(), set(),
-				Ch(')'), group.basics.optWS(),
+				Test(String("switch"), group.basics.testLexBreak()),
+				actions.p(new Switch()),
+				String("switch"), actions.structure(), group.basics.optWS(),
+				Ch('('), actions.structure(), group.basics.optWS(),
+				group.expressions.anyExpression(),
+				swap(),
+				push(((Switch) pop()).rawCondition(pop())),
+				Ch(')'), actions.structure(), group.basics.optWS(),
 				blockStatement(),
-				set(actions.createSwitchStatement(value(), lastValue())));
+				actions.endPosByNode(),
+				swap(),
+				push(((Switch) pop()).rawBody(pop())));
 	}
 	
 	/**
@@ -203,10 +276,14 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule caseStatement() {
 		return Sequence(
-				String("case"), group.basics.testLexBreak(), group.basics.optWS(),
-				group.expressions.anyExpression(), set(),
-				Ch(':'), group.basics.optWS(),
-				set(actions.createCaseStatement(value())));
+				Test(String("case"), group.basics.testLexBreak()),
+				actions.p(new Case()),
+				String("case"), actions.structure(), group.basics.optWS(),
+				group.expressions.anyExpression(),
+				Ch(':'), actions.structure(),
+				swap(),
+				push(((Case) pop()).rawCondition(pop())),
+				actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -214,9 +291,10 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule defaultStatement() {
 		return Sequence(
-				String("default").label("defaultKeyword"), group.basics.testLexBreak(), group.basics.optWS(),
-				Ch(':'), group.basics.optWS(),
-				set(actions.createDefaultStatement(node("defaultKeyword"))));
+				Test(String("default"), group.basics.testLexBreak()),
+				actions.p(new Default()),
+				String("default"), actions.structure(), group.basics.optWS(),
+				Ch(':'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -224,12 +302,18 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule whileStatement() {
 		return Sequence(
-				String("while"), group.basics.testLexBreak(), group.basics.optWS(),
-				Ch('('), group.basics.optWS(),
+				Test(String("while"), group.basics.testLexBreak()),
+				actions.p(new While()),
+				String("while"), actions.structure(), group.basics.optWS(),
+				Ch('('), actions.structure(), group.basics.optWS(),
 				group.expressions.anyExpression().label("condition"),
-				Ch(')'), group.basics.optWS(),
-				anyStatement(), set(),
-				set(actions.createWhileStatement(value("condition"), value())));
+				swap(),
+				push(((While) pop()).rawCondition(pop())),
+				Ch(')'), actions.structure(), group.basics.optWS(),
+				anyStatement(),
+				actions.endPosByNode(),
+				swap(),
+				push(((While) pop()).rawStatement(pop())));
 	}
 	
 	/**
@@ -237,14 +321,21 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule doWhileStatement() {
 		return Sequence(
-				String("do"), group.basics.testLexBreak(), group.basics.optWS(),
-				anyStatement(), set(),
-				String("while"), group.basics.testLexBreak(), group.basics.optWS(),
-				Ch('('), group.basics.optWS(),
+				Test(String("do"), group.basics.testLexBreak()),
+				actions.p(new DoWhile()),
+				String("do"), actions.structure(), group.basics.optWS(),
+				anyStatement(),
+				actions.endPosByNode(),
+				swap(),
+				push(((DoWhile) pop()).rawStatement(pop())),
+				Test(String("while"), group.basics.testLexBreak()),
+				String("while"), actions.structure(), group.basics.optWS(),
+				Ch('('), actions.structure(), group.basics.optWS(),
 				group.expressions.anyExpression().label("condition"),
-				Ch(')'), group.basics.optWS(),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createDoStatement(value("condition"), value())));
+				swap(),
+				push(((DoWhile) pop()).rawCondition(pop())),
+				Ch(')'), actions.structure(), group.basics.optWS(),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -252,35 +343,54 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule basicForStatement() {
 		return Sequence(
-				String("for"), group.basics.testLexBreak(), group.basics.optWS(),
-				Ch('('), group.basics.optWS(),
-				forInit().label("init"),
-				Ch(';'), group.basics.optWS(),
-				Optional(group.expressions.anyExpression()).label("condition"),
-				Ch(';'), group.basics.optWS(),
-				forUpdate().label("update"),
-				Ch(')'), group.basics.optWS(),
-				anyStatement().label("statement"),
-				set(actions.createBasicFor(value("init"), value("condition"), value("update"), value("statement"))));
+				Test(String("for"), group.basics.testLexBreak()),
+				actions.p(new For()),
+				String("for"), actions.structure(), group.basics.optWS(),
+				Ch('('), actions.structure(), group.basics.optWS(),
+				Optional(forInit()),
+				Ch(';'), actions.structure(), group.basics.optWS(),
+				Optional(
+						group.expressions.anyExpression(),
+						swap(),
+						push(((For) pop()).rawCondition(pop()))),
+				Ch(';'), actions.structure(), group.basics.optWS(),
+				Optional(forUpdate()),
+				Ch(')'), actions.structure(), group.basics.optWS(),
+				anyStatement(),
+				actions.endPosByNode(),
+				swap(),
+				push(((For) pop()).rawStatement(pop())));
 	}
 	
+	// A 'For' object MUST be top of stack.
 	Rule forInit() {
-		return Optional(FirstOf(
-				variableDefinition(),
-				statementExpressionList()));
+		return FirstOf(
+				Sequence(
+						variableDefinition(),
+						swap(),
+						push(((For) pop()).rawVariableDeclaration(pop()))),
+				Sequence(
+						statementExpressionList(),
+						actions.addStatementExpressionsToForInit(peek(1), pop())));
 	}
 	
 	Rule forUpdate() {
-		return Optional(statementExpressionList());
+		return Sequence(
+				statementExpressionList(),
+				actions.addStatementExpressionsToForUpdate(peek(1), pop()));
 	}
 	
 	Rule statementExpressionList() {
 		return Sequence(
-				group.expressions.statementExpression().label("head"),
-				ZeroOrMore(Sequence(
-						Ch(','), group.basics.optWS(),
-						group.expressions.statementExpression()).label("tail")),
-				set(actions.createStatementExpressionList(value("head"), values("ZeroOrMore/tail"))));
+				actions.p(new TemporaryNode.StatementExpressionList()),
+				group.expressions.statementExpression(),
+				swap(),
+				((TemporaryNode.StatementExpressionList) peek(1)).expressions.add(pop()),
+				ZeroOrMore(
+						Ch(','), actions.structure(), group.basics.optWS(),
+						group.expressions.statementExpression(),
+						swap(),
+						((TemporaryNode.StatementExpressionList) peek(1)).expressions.add(pop())));
 	}
 	
 	/**
@@ -289,16 +399,29 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule enhancedForStatement() {
 		return Sequence(
-				String("for"), group.basics.testLexBreak(), group.basics.optWS(),
-				Ch('('), group.basics.optWS(),
-				group.structures.variableDefinitionModifiers().label("modifiers"),
-				group.types.type().label("type"),
-				group.structures.variableDefinitionPartNoAssign().label("varDeclPart"),
-				Ch(':'), group.basics.optWS(),
-				group.expressions.anyExpression().label("iterable"),
-				Ch(')'), group.basics.optWS(),
-				anyStatement().label("statement"),
-				set(actions.createEnhancedFor(node("modifiers"), value("type"), node("varDeclPart"), value("iterable"), value("statement"))));
+				Test(String("for"), group.basics.testLexBreak()),
+				actions.p(new ForEach()),
+				String("for"), actions.structure(), group.basics.optWS(),
+				Ch('('), actions.structure(), group.basics.optWS(),
+				group.structures.modifiers(),
+				push(new VariableDefinition()),
+				actions.startPosByNode(),
+				push(((VariableDefinition) pop()).astModifiers((Modifiers) pop())),
+				group.types.type(),
+				swap(),
+				push(((VariableDefinition) pop()).rawTypeReference(pop())),
+				group.structures.variableDefinitionPartNoAssign(),
+				actions.endPosByNode(),
+				swap(),
+				push(((VariableDefinition) pop()).rawVariables().addToEnd(pop())),
+				Ch(':'), actions.structure(), group.basics.optWS(),
+				group.expressions.anyExpression(),
+				swap(),
+				push(((ForEach) pop()).rawIterable(pop())),
+				Ch(')'), actions.structure(), group.basics.optWS(),
+				anyStatement(),
+				actions.endPosByNode(), swap(),
+				push(((ForEach) pop()).rawStatement(pop())));
 	}
 	
 	/**
@@ -306,10 +429,15 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule breakStatement() {
 		return Sequence(
-				String("break"), group.basics.testLexBreak(), group.basics.optWS(),
-				Optional(group.basics.identifier()).label("identifier"),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createBreak(value("identifier"))));
+				Test(String("break"), group.basics.testLexBreak()),
+				actions.p(new Break()),
+				String("break"), actions.structure(), actions.endPosByPos(), group.basics.optWS(),
+				Optional(
+						group.basics.identifier(),
+						actions.turnToIdentifier(),
+						actions.endPosByNode(),
+						push(((Break) pop()).astLabel((Identifier) pop()))),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -317,10 +445,15 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule continueStatement() {
 		return Sequence(
-				String("continue"), group.basics.testLexBreak(), group.basics.optWS(),
-				Optional(group.basics.identifier()).label("identifier"),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createContinue(value("identifier"))));
+				Test(String("continue"), group.basics.testLexBreak()),
+				actions.p(new Continue()),
+				String("continue"), actions.structure(), actions.endPosByPos(), group.basics.optWS(),
+				Optional(
+						group.basics.identifier(),
+						actions.turnToIdentifier(),
+						actions.endPosByNode(),
+						push(((Continue) pop()).astLabel((Identifier) pop()))),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -328,10 +461,15 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule returnStatement() {
 		return Sequence(
-				String("return"), group.basics.testLexBreak(), group.basics.optWS(),
-				Optional(group.expressions.anyExpression()).label("value"),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createReturn(value("value"))));
+				Test(String("return"), group.basics.testLexBreak()),
+				actions.p(new Return()),
+				String("return"), actions.structure(), actions.endPosByPos(), group.basics.optWS(),
+				Optional(
+						group.expressions.anyExpression(),
+						actions.endPosByNode(),
+						swap(),
+						push(((Return) pop()).rawValue(pop()))),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -339,10 +477,14 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule throwStatement() {
 		return Sequence(
-				String("throw"), group.basics.testLexBreak(), group.basics.optWS(),
-				group.expressions.anyExpression().label("throwable"),
-				Ch(';'), group.basics.optWS(),
-				set(actions.createThrow(value("throwable"))));
+				Test(String("throw"), group.basics.testLexBreak()),
+				actions.p(new Throw()),
+				String("throw"), actions.structure(), actions.endPosByPos(), group.basics.optWS(),
+				group.expressions.anyExpression(),
+				actions.endPosByNode(),
+				swap(),
+				push(((Throw) pop()).rawThrowable(pop())),
+				Ch(';'), actions.structure(), actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	/**
@@ -350,12 +492,18 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule synchronizedStatement() {
 		return Sequence(
-				String("synchronized"), group.basics.testLexBreak(), group.basics.optWS(),
-				Ch('('), group.basics.optWS(),
+				Test(String("synchronized"), group.basics.testLexBreak()),
+				actions.p(new Synchronized()),
+				String("synchronized"), actions.structure(), group.basics.optWS(),
+				Ch('('), actions.structure(), group.basics.optWS(),
 				group.expressions.anyExpression().label("lock"),
-				Ch(')'), group.basics.optWS(),
+				swap(),
+				push(((Synchronized) pop()).rawLock(pop())),
+				Ch(')'), actions.structure(), group.basics.optWS(),
 				blockStatement().label("body"),
-				set(actions.createSynchronizedStatement(value("lock"), value("body"))));
+				actions.endPosByNode(),
+				swap(),
+				push(((Synchronized) pop()).rawBody(pop())));
 	}
 	
 	/**
@@ -363,24 +511,53 @@ public class StatementsParser extends BaseParser<Node> {
 	 */
 	public Rule tryStatement() {
 		return Sequence(
-				String("try"), group.basics.testLexBreak(), group.basics.optWS(),
+				Test(String("try"), group.basics.testLexBreak()),
+				actions.p(new Try()),
+				String("try"), actions.structure(), group.basics.optWS(),
 				blockStatement().label("body"),
-				ZeroOrMore(catchBlock().label("catchBlock")),
-				Optional(Sequence(
-						String("finally"), group.basics.testLexBreak(), group.basics.optWS(),
-						blockStatement().label("finallyBody"))),
-				set(actions.createTryStatement(value("body"), values("ZeroOrMore/catchBlock"), value("Optional/Sequence/finallyBody"))));
+				actions.endPosByNode(),
+				swap(),
+				push(((Try) pop()).rawBody(pop())),
+				ZeroOrMore(
+						catchBlock(),
+						actions.endPosByNode(),
+						swap(),
+						push(((Try) pop()).rawCatches().addToEnd(pop()))),
+				Optional(
+						Test(String("finally"), group.basics.testLexBreak()),
+						String("finally"), actions.structure(), group.basics.optWS(),
+						blockStatement(),
+						actions.endPosByNode(),
+						swap(),
+						push(((Try) pop()).rawFinally(pop()))));
 	}
 	
 	Rule catchBlock() {
 		return Sequence(
-				String("catch"), group.basics.testLexBreak(), group.basics.optWS(),
-				Ch('('), group.basics.optWS(),
-				group.structures.variableDefinitionModifiers().label("modifiers"),
-				group.types.type().label("type"),
+				Test(String("catch"), group.basics.testLexBreak()),
+				actions.p(new Catch()),
+				String("catch"), actions.structure(), group.basics.optWS(),
+				Ch('('), actions.structure(), group.basics.optWS(),
+				group.structures.modifiers(),
+				push(new VariableDefinition()),
+				actions.startPosByNode(),
+				push(((VariableDefinition) pop()).astModifiers((Modifiers) pop())),
+				group.types.type(),
+				push(((VariableDefinition) pop()).rawTypeReference(pop())),
 				group.basics.identifier().label("varName"),
-				Ch(')'), group.basics.optWS(),
+				actions.turnToIdentifier(),
+				push(new VariableDefinitionEntry()),
+				actions.startPosByNode(),
+				swap(), actions.endPosByNode(), swap(),
+				push(((VariableDefinitionEntry) pop()).astName((Identifier) pop())),
+				swap(),
+				push(((VariableDefinition) pop()).rawVariables().addToEnd(pop())),
+				swap(),
+				push(((Catch) pop()).rawExceptionDeclaration(pop())),
+				Ch(')'), actions.structure(), group.basics.optWS(),
 				blockStatement().label("body"),
-				set(actions.createCatch(value("modifiers"), value("type"), value("varName"), value("body"))));
+				actions.endPosByNode(),
+				swap(),
+				push(((Catch) pop()).rawBody(pop())));
 	}
 }
