@@ -664,19 +664,22 @@ public class StructuresParser extends BaseParser<Node> {
 						String("static"), group.basics.testLexBreak(), group.basics.optWS(),
 						push(((ImportDeclaration) pop()).astStaticImport(true))),
 				group.basics.identifier(),
+				actions.turnToIdentifier(),
 				swap(),
 				push(((ImportDeclaration) pop()).rawParts().addToEnd(pop())),
 				ZeroOrMore(
 						group.basics.dotIdentifier(),
 						swap(),
-						push(((PackageDeclaration) pop()).rawParts().addToEnd(pop()))),
+						push(((ImportDeclaration) pop()).rawParts().addToEnd(pop()))),
 				Optional(
 						Test(Ch('.'), group.basics.optWS(), Ch('*')),
 						Ch('.'), actions.structure(),
 						group.basics.optWS(),
 						Ch('*'), actions.structure(),
+						group.basics.optWS(),
 						push(((ImportDeclaration) pop()).astStarImport(true))),
-				Ch(';'), actions.endPosByPos(), group.basics.optWS());
+				Ch(';'),
+				actions.endPosByPos(), group.basics.optWS());
 	}
 	
 	public Rule compilationUnitEoi() {

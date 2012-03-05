@@ -39,8 +39,10 @@ import lombok.ast.NodeStructures;
 import lombok.ast.Position;
 
 import org.parboiled.Context;
+import org.parboiled.errors.InvalidInputError;
 import org.parboiled.errors.ParseError;
 import org.parboiled.parserunners.RecoveringParseRunner;
+import org.parboiled.support.MatcherPath;
 import org.parboiled.support.ParsingResult;
 
 import com.google.common.collect.ImmutableList;
@@ -186,7 +188,16 @@ public class Source {
 		for (ParseError error : parsingResult.parseErrors) {
 			int errStart = error.getStartIndex();
 			int errEnd = error.getEndIndex();
-			problems.add(new ParseProblem(new Position(mapPosition(errStart), mapPosition(errEnd)), error.toString()));
+			String errMsg = error.getErrorMessage();
+			if (error instanceof InvalidInputError) {
+				if (errMsg == null) errMsg = "";
+				else errMsg += "\n";
+				errMsg += "Failed Matchers:\n";
+				for (MatcherPath failed : ((InvalidInputError) error).getFailedMatchers()) {
+					errMsg += "* " + failed.toString() + "\n";
+				}
+			}
+			problems.add(new ParseProblem(new Position(mapPosition(errStart), mapPosition(errEnd)), errMsg));
 		}
 		
 		nodes.add(parsingResult.resultValue);

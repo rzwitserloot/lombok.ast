@@ -163,11 +163,11 @@ public class PerformanceTest extends RunForEachFileInDirRunner.SourceFileBasedTe
 					@Cleanup FileOutputStream rawOut = new FileOutputStream(reportFile);
 					Writer out = new BufferedWriter(new OutputStreamWriter(rawOut, "UTF-8"));
 					out.write(String.format("Parse Profile for: %s which is slower than javac by a factor of %.02f\n", source.getName(), factorVsJavac));
-					for (String report : source.getDetailedProfileInformation(25)) {
-						out.write(report);
-						out.write("===================================");
-						out.write("\n");
-					}
+//					for (String report : source.getDetailedProfileInformation(25)) {
+//						out.write(report);
+//						out.write("===================================");
+//						out.write("\n");
+//					}
 					out.close();
 					rawOut.close();
 					System.out.println("Profile report written to: " + reportFile.getCanonicalPath());

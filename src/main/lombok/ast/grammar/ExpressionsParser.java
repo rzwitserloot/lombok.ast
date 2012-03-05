@@ -219,6 +219,8 @@ public class ExpressionsParser extends BaseParser<Node> {
 				group.basics.identifier(),
 				actions.turnToIdentifier(),
 				actions.endPosByNode(),
+				swap(),
+				push(((VariableReference) pop()).astIdentifier((Identifier) pop())),
 				Optional(
 						group.structures.methodArguments(),
 						swap(), push(actions.createSimpleMethodInvocation(pop(), pop()))));
@@ -348,13 +350,14 @@ public class ExpressionsParser extends BaseParser<Node> {
 						group.basics.optWS()));
 	}
 	
+	// Call this with 'operand' on top of stack.
 	Rule unaryPostfix(Rule operator, UnaryOperator op) {
 		return Sequence(
 				Test(operator),
 				push(new UnaryExpression().astOperator(op)),
 				actions.startPosByNode(),
 				operator, actions.structure(),
-				swap(), push(((UnaryExpression) pop()).rawOperand(pop())));
+				push(((UnaryExpression) pop()).rawOperand(pop())));
 
 	}
 	
@@ -394,7 +397,7 @@ public class ExpressionsParser extends BaseParser<Node> {
 						group.basics.optWS(),
 						level2ExpressionChaining(),
 						actions.endPosByNode(),
-						swap(), push(((UnaryExpression) pop()).rawOperand(pop()))),
+						swap(), push(((Cast) pop()).rawOperand(pop()))),
 				postfixIncrementExpressionChaining());
 	}
 	
@@ -447,6 +450,7 @@ public class ExpressionsParser extends BaseParser<Node> {
 						group.basics.optWS(),
 						group.types.type(),
 						actions.endPosByNode(),
+						swap(),
 						push(((InstanceOf) pop()).rawTypeReference(pop()))));
 	}
 	
@@ -549,14 +553,18 @@ public class ExpressionsParser extends BaseParser<Node> {
 	Rule assignmentExpressionChaining() {
 		return Sequence(
 				inlineIfExpressionChaining(),
+				actions.printStack("A"),
 				Optional(
 						assignmentOperator(),
 						push(new BinaryExpression().rawOperator(match())),
 						actions.structure(),
 						actions.startPosByNode(),
-						swap(), push(((BinaryExpression) pop()).rawLeft(pop())),
+						actions.printStack("C"),
+						actions.printNode(peek(1)),
+						push(((BinaryExpression) pop()).rawLeft(pop())),
 						group.basics.optWS(),
 						assignmentExpressionChaining(),
+						actions.printStack("B"),
 						actions.endPosByNode(),
 						swap(), push(((BinaryExpression) pop()).rawRight(pop()))));
 	}

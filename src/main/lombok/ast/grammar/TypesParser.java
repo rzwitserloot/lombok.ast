@@ -56,6 +56,7 @@ public class TypesParser extends BaseParser<Node> {
 						Ch('['), actions.structure(),
 						group.basics.optWS(),
 						Ch(']'), actions.structure(),
+						group.basics.optWS(),
 						actions.incrementArrayDimensions()));
 	}
 	
@@ -197,7 +198,7 @@ public class TypesParser extends BaseParser<Node> {
 										Sequence(
 												Test(String("super"), group.basics.testLexBreak()),
 												push(((TypeReference) pop()).astWildcard(WildcardKind.SUPER)),
-												String("extends"), actions.structure())),
+												String("super"), actions.structure())),
 								group.basics.optWS(),
 								type(),
 								actions.mergeTypeRefs())));

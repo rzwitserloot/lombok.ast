@@ -63,31 +63,7 @@ public class StatementsParser extends BaseParser<Node> {
 	}
 	
 	public Rule anyStatement() {
-		return Sequence(
-				TestNot(Ch('}')),
-				explicitlyLabelledStatement(),
-				blockStatement(),
-				localClassDeclaration(),
-				localVariableDeclaration(),
-				emptyStatement(),
-				expressionStatement(),
-				ifStatement(),
-				assertStatement(),
-				switchStatement(),
-				caseStatement(),
-				defaultStatement(),
-				whileStatement(),
-				doWhileStatement(),
-				basicForStatement(),
-				enhancedForStatement(),
-				breakStatement(),
-				continueStatement(),
-				returnStatement(),
-				synchronizedStatement(),
-				throwStatement(),
-				tryStatement(),
-				explicitAlternateConstructorInvocation(),
-				explicitSuperConstructorInvocation());
+		return labelledStatement();
 	}
 	
 	/**
@@ -181,18 +157,44 @@ public class StatementsParser extends BaseParser<Node> {
 	 * 
 	 * @see <a href="http://java.sun.com/docs/books/jls/third_edition/html/statements.html#14.7">JLS section 14.7</a>
 	 */
-	public Rule explicitlyLabelledStatement() {
+	public Rule labelledStatement() {
 		return Sequence(
-				group.basics.identifier(),
-				actions.turnToIdentifier(),
-				Test(Ch(':')),
-				actions.p(new LabelledStatement()),
-				Ch(':'), actions.structure(), group.basics.optWS(),
-				push(((LabelledStatement) pop()).astLabel((Identifier) pop())),
-				anyStatement(),
-				actions.endPosByNode(),
-				swap(),
-				push(((LabelledStatement) pop()).rawStatement(pop())));
+				actions.p(new TemporaryNode.SentinelNode()),
+				ZeroOrMore(
+						group.basics.identifier(),
+						actions.turnToIdentifier(),
+						Test(Ch(':')),
+						actions.p(new LabelledStatement()),
+						Ch(':'), actions.structure(), group.basics.optWS(),
+						push(((LabelledStatement) pop()).astLabel((Identifier) pop()))),
+				nonLabelledStatement(),
+				actions.buildLabelStack());
+	}
+	
+	Rule nonLabelledStatement() {
+		return FirstOf(
+				blockStatement(),
+				localClassDeclaration(),
+				localVariableDeclaration(),
+				emptyStatement(),
+				expressionStatement(),
+				ifStatement(),
+				assertStatement(),
+				switchStatement(),
+				caseStatement(),
+				defaultStatement(),
+				whileStatement(),
+				doWhileStatement(),
+				basicForStatement(),
+				enhancedForStatement(),
+				breakStatement(),
+				continueStatement(),
+				returnStatement(),
+				synchronizedStatement(),
+				throwStatement(),
+				tryStatement(),
+				explicitAlternateConstructorInvocation(),
+				explicitSuperConstructorInvocation());
 	}
 	
 	/**
@@ -383,12 +385,12 @@ public class StatementsParser extends BaseParser<Node> {
 	Rule statementExpressionList() {
 		return Sequence(
 				actions.p(new TemporaryNode.StatementExpressionList()),
-				group.expressions.statementExpression(),
+				group.expressions.anyExpression(),
 				swap(),
 				((TemporaryNode.StatementExpressionList) peek(1)).expressions.add(pop()),
 				ZeroOrMore(
 						Ch(','), actions.structure(), group.basics.optWS(),
-						group.expressions.statementExpression(),
+						group.expressions.anyExpression(),
 						swap(),
 						((TemporaryNode.StatementExpressionList) peek(1)).expressions.add(pop())));
 	}

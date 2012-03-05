@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,8 +25,6 @@ import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
-
-import javax.lang.model.element.ExecutableElement;
 
 import lombok.ast.template.CopyMethod;
 import lombok.ast.template.ForcedType;
@@ -1328,7 +1326,7 @@ class AnnotationMethodDeclarationTemplate {
 	}
 }
 
-@GenerateAstNode(implementing={ExecutableElement.class, DescribedNode.class}, mixin=TypeMemberMixin.class)
+@GenerateAstNode(implementing={ExecutableDeclaration.class, TypeMember.class, DescribedNode.class}, mixin=TypeMemberMixin.class)
 class MethodDeclarationTemplate {
 	Comment javadoc1;
 	
@@ -1347,7 +1345,7 @@ class MethodDeclarationTemplate {
 	}
 }
 
-@GenerateAstNode(implementing=ExecutableDeclaration.class, mixin=TypeMemberMixin.class)
+@GenerateAstNode(implementing={ExecutableDeclaration.class, TypeMember.class}, mixin=TypeMemberMixin.class)
 class ConstructorDeclarationTemplate {
 	Comment javadoc1;
 	

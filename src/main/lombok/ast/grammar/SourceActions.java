@@ -36,6 +36,25 @@ class SourceActions extends BaseActions<Node> {
 		this.source = source;
 	}
 	
+	public boolean printNode(Node node) {
+		System.out.printf("PARENT: %s\n--\n%s\n", node.getParent(), node);
+		return true;
+	}
+	
+	public boolean printStack(String key) {
+		int idx = 0;
+		System.out.printf("%s: PRINTING STACK AT %d\n", key, currentPos());
+		while (true) {
+			try {
+				Node elem = peek(idx);
+				System.out.printf("%3d: %20s - %s\n", idx++, elem.getClass().getSimpleName(), elem);
+			} catch (IllegalArgumentException e) {
+				break;
+			}
+		}
+		return true;
+	}
+	
 	boolean p(Node value) {
 		return push(value.setPosition(new Position(startPos(), currentPos())));
 	}

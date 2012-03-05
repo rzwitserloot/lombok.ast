@@ -24,6 +24,7 @@ package lombok.ast.grammar;
 import lombok.ast.AlternateConstructorInvocation;
 import lombok.ast.DanglingNodes;
 import lombok.ast.For;
+import lombok.ast.LabelledStatement;
 import lombok.ast.Modifiers;
 import lombok.ast.Node;
 import lombok.ast.SuperConstructorInvocation;
@@ -113,6 +114,23 @@ public class StatementsActions extends SourceActions {
 			source.transportLogistics(sel, forNode);
 		}
 		
+		return true;
+	}
+	
+	public boolean buildLabelStack() {
+		Node statement = pop();
+		Node label = pop();
+		while (!(label instanceof TemporaryNode.SentinelNode)) {
+			if (label instanceof LabelledStatement) {
+				((LabelledStatement) label).rawStatement(statement);
+				label.setPosition(label.getPosition().withEnd(statement.getPosition().getEnd()));
+			} else {
+				DanglingNodes.addDanglingNode(label, statement);
+			}
+			statement = label;
+			label = pop();
+		}
+		push(statement);
 		return true;
 	}
 }
