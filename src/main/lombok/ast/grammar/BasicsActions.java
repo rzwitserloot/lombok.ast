@@ -22,22 +22,11 @@
 package lombok.ast.grammar;
 
 import lombok.ast.Comment;
-import lombok.ast.Identifier;
-import lombok.ast.Node;
 import lombok.ast.Position;
 
 public class BasicsActions extends SourceActions {
 	public BasicsActions(Source source) {
 		super(source);
-	}
-	
-	public Node createIdentifier(String text, int start, int end) {
-		Identifier id = new Identifier();
-		if (text != null) id.astValue(text);
-		
-		end = Math.max(start, end);
-		id.setPosition(new Position(start, end));
-		return id;
 	}
 	
 	public boolean checkIfKeyword(String text) {

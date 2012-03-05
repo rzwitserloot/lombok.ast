@@ -42,6 +42,7 @@ import org.parboiled.Context;
 import org.parboiled.errors.InvalidInputError;
 import org.parboiled.errors.ParseError;
 import org.parboiled.parserunners.RecoveringParseRunner;
+import org.parboiled.parserunners.ReportingParseRunner;
 import org.parboiled.support.MatcherPath;
 import org.parboiled.support.ParsingResult;
 
@@ -160,6 +161,14 @@ public class Source {
 		postProcess();
 	}
 	
+	public void parseBasic() {
+		if (parsed) return;
+		preProcess();
+		ParserGroup group = new ParserGroup(this);
+		parsingResult = new RecoveringParseRunner<Node>(group.basics.dotIdentifier()).run(preprocessed);
+		postProcess();
+	}
+	
 	public void parseExpression() {
 		if (parsed) return;
 		preProcess();
@@ -200,7 +209,9 @@ public class Source {
 			problems.add(new ParseProblem(new Position(mapPosition(errStart), mapPosition(errEnd)), errMsg));
 		}
 		
-		nodes.add(parsingResult.resultValue);
+		nodes.add(NodeBuilder.buildFromResult(parsingResult));
+		
+//		nodes.add(parsingResult.resultValue);
 		
 		if (parsingResult.parseTreeRoot != null) {
 			gatherComments(parsingResult.parseTreeRoot);

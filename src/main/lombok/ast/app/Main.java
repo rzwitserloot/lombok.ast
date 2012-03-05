@@ -134,26 +134,27 @@ public class Main {
 		private List<String> input = new ArrayList<String>();
 	}
 	
-//	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Exception {
 //		String[] SOURCE = {"null", "true", "false", "0x5D", "5L", "3.0F", "0x1p0d", "0x.1p0", "\"Hey\"", "'5'"};
 //		String[] SOURCE = {"(5 + 5 == 0) ? 3 : 2", "new java.lang.ArrayList<T>() {}"};
-//		
-//		for (String source : SOURCE) {
-//			Source s = new Source(source, "Test.java");
-//			System.out.println("XYZ: " + source);
-//			s.parseExpression();
-//			int idx = 0;
-//			System.out.printf("PARSED: %d\n", s.getNodes().size());
-//			for (ParseProblem problem : s.getProblems()) {
-//				System.out.printf("PROBLEM: %s\n", problem);
-//			}
-//			for (Node node : s.getNodes()) {
-//				System.out.printf("Node %d: %s -- %s\n", ++idx, node.getClass().getSimpleName(), node);
-//			}
-//		}
-//	}
-//	
-	public static void main(String[] rawArgs) throws Exception {
+		String[] SOURCE = {"hello     ", ".\nhello /*foo*/  \t\n"};
+		
+		for (String source : SOURCE) {
+			Source s = new Source(source, "Test.java");
+			System.out.println("XYZ: " + source);
+			s.parseBasic();
+			int idx = 0;
+			System.out.printf("PARSED: %d\n", s.getNodes().size());
+			for (ParseProblem problem : s.getProblems()) {
+				System.out.printf("PROBLEM: %s\n", problem);
+			}
+			for (Node node : s.getNodes()) {
+				System.out.printf("Node %d: %s -- %s\n", ++idx, node.getClass().getSimpleName(), node);
+			}
+		}
+	}
+	
+	public static void main2(String[] rawArgs) throws Exception {
 		CmdArgs args;
 		CmdReader<CmdArgs> reader = CmdReader.of(CmdArgs.class);
 		

@@ -75,7 +75,7 @@ public class ExpressionsParser extends BaseParser<Node> {
 		return Sequence(
 				Ch('('), group.basics.optWS(),
 				anyExpression(),
-				Ch(')'), push(actions.addParens(pop())),
+				Ch(')'),
 				group.basics.optWS());
 	}
 	

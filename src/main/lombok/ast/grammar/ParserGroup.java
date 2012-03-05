@@ -42,5 +42,12 @@ public class ParserGroup {
 		expressions = Parboiled.createParser(ExpressionsParser.class, this);
 		statements = Parboiled.createParser(StatementsParser.class, this);
 		structures = Parboiled.createParser(StructuresParser.class, this);
+		
+		NodeBuilder.registerBuilders(BasicsParser.class);
+		NodeBuilder.registerBuilders(LiteralsParser.class);
+		NodeBuilder.registerBuilders(TypesParser.class);
+		NodeBuilder.registerBuilders(ExpressionsParser.class);
+		NodeBuilder.registerBuilders(StatementsParser.class);
+		NodeBuilder.registerBuilders(StructuresParser.class);
 	}
 }

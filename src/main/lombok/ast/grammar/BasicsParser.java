@@ -25,17 +25,20 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import lombok.ast.Identifier;
 import lombok.ast.Node;
 
 import org.parboiled.BaseParser;
 import org.parboiled.MatcherContext;
 import org.parboiled.Rule;
+import org.parboiled.annotations.BuildParseTree;
 import org.parboiled.annotations.SuppressSubnodes;
 import org.parboiled.matchers.CustomMatcher;
 
 /**
  * Contains the basics of java parsing: Whitespace and comment handling, as well as applying backslash-u escapes.
  */
+@BuildParseTree
 public class BasicsParser extends BaseParser<Node> {
 	final ParserGroup group;
 	final BasicsActions actions;
@@ -64,21 +67,37 @@ public class BasicsParser extends BaseParser<Node> {
 		return TestNot(identifierPart());
 	}
 	
+	public Rule eitherIdentifier() {
+		return FirstOf(identifier(), dotIdentifier());
+	}
+	
+	@BuilderType(IdentifierBuilder.class)
 	public Rule identifier() {
 		return Sequence(
 				identifierRaw(),
 				actions.checkIfKeyword(match()),
-				push(actions.createIdentifier(match(), matchStart(), matchEnd())),
 				optWS());
 	}
 	
+	@BuilderType(IdentifierBuilder.class)
 	public Rule dotIdentifier() {
 		return Sequence(
-				Ch('.'), actions.structure(), optWS(),
-				identifierRaw().label("identifier"),
+				Ch('.'), optWS(),
+				identifierRaw(),
 				actions.checkIfKeyword(match()),
-				push(actions.createIdentifier(match(), matchStart(), matchEnd())),
 				optWS());
+	}
+	
+	static class IdentifierBuilder extends NodeBuilder<Identifier> {
+		@Override public void visitUnknownChild(String category, org.parboiled.Node<?> pNode) {
+			if (!"identifierRaw".equals(pNode.getLabel())) {
+				super.visitUnknownChild(category, pNode);
+				return;
+			}
+			
+			end(pNode);
+			result.astValue(extract(pNode));
+		}
 	}
 	
 	/**
