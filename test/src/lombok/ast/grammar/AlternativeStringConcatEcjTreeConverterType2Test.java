@@ -33,8 +33,8 @@ import org.junit.Test;
 
 public class AlternativeStringConcatEcjTreeConverterType2Test extends EcjTreeConverterType2Test {
 	@Test
-	public boolean testEcjTreeConverter(Source source) throws Exception {
-		return testCompiler(source);
+	public void testEcjTreeConverter(Source source) throws Exception {
+		testCompiler(source);
 	}
 	
 	@Override protected Collection<DirDescriptor> getDirDescriptors() {

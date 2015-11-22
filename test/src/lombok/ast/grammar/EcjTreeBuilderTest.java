@@ -62,8 +62,8 @@ public class EcjTreeBuilderTest extends TreeBuilderRunner<ASTNode> {
 	}
 	
 	@Test
-	public boolean testEcjTreeBuilder(Source source) throws Exception {
-		return testCompiler(source);
+	public void testEcjTreeBuilder(Source source) throws Exception {
+		testCompiler(source);
 	}
 	
 	protected CompilerOptions ecjCompilerOptions() {

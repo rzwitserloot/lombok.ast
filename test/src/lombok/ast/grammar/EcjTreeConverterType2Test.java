@@ -49,8 +49,8 @@ public class EcjTreeConverterType2Test extends TreeBuilderRunner<ASTNode> {
 	}
 	
 	@Test
-	public boolean testEcjTreeConverter(Source source) throws Exception {
-		return testCompiler(source);
+	public void testEcjTreeConverter(Source source) throws Exception {
+		testCompiler(source);
 	}
 	
 	@Override

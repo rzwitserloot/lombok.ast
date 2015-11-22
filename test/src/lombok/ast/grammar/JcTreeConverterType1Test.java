@@ -61,8 +61,8 @@ public class JcTreeConverterType1Test extends TreeBuilderRunner<Node> {
 	}
 	
 	@Test
-	public boolean testJcTreeConverter(Source source) throws Exception {
-		return testCompiler(source);
+	public void testJcTreeConverter(Source source) throws Exception {
+		testCompiler(source);
 	}
 	
 	private static void normalizeNumberLiterals(Node tree) {

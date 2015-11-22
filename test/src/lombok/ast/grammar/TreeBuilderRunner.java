@@ -46,13 +46,13 @@ abstract class TreeBuilderRunner<N> extends RunForEachFileInDirRunner.SourceFile
 				DirDescriptor.of(new File("test/resources/special"), true));
 	}
 	
-	protected boolean testCompiler(Source source) throws Exception {
+	protected void testCompiler(Source source) throws Exception {
 		N parsedWithTargetCompiler = parseWithTargetCompiler(source);
 		if (parsedWithTargetCompiler == null) {
 			// Skip test if target compiler can't compile it.
 			// A separate test that checks if test samples compile
 			// at all will do error reporting.
-			return false;
+			fail("Compilation error, will be reported separately");
 		}
 		String targetString = convertToString(parsedWithTargetCompiler);
 		
@@ -94,8 +94,6 @@ abstract class TreeBuilderRunner<N> extends RunForEachFileInDirRunner.SourceFile
 			}
 			throw e;
 		}
-		
-		return true;
 	}
 	
 	protected boolean checkForLombokAstParseFailure() {

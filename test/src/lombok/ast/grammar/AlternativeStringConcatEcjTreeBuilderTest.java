@@ -40,8 +40,8 @@ public class AlternativeStringConcatEcjTreeBuilderTest extends EcjTreeBuilderTes
 	}
 	
 	@Test
-	public boolean testAlternativeStringConcatEcjCompiler(Source source) throws Exception {
-		return testCompiler(source);
+	public void testAlternativeStringConcatEcjCompiler(Source source) throws Exception {
+		testCompiler(source);
 	}
 	
 	@Override protected CompilerOptions ecjCompilerOptions() {

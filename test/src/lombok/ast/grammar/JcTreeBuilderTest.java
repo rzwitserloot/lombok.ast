@@ -46,8 +46,8 @@ public class JcTreeBuilderTest extends TreeBuilderRunner<JCTree> {
 	}
 	
 	@Test
-	public boolean testJcTreeBuilder(Source source) throws Exception {
-		return testCompiler(source);
+	public void testJcTreeBuilder(Source source) throws Exception {
+		testCompiler(source);
 	}
 	
 	protected String convertToString(JCTree tree) {

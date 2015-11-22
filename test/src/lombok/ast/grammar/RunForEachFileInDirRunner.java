@@ -331,17 +331,29 @@ public class RunForEachFileInDirRunner extends Runner {
 					notifier.fireTestIgnored(testDescription);
 					continue;
 				}
-				notifier.fireTestStarted(testDescription);
+				
 				if (error != null) {
+					notifier.fireTestStarted(testDescription);
 					notifier.fireTestFailure(new Failure(testDescription, error));
-				} else {
-					try {
-						if (!runTest(content, data.getMain(), data.getAlias(), test.getKey())) {
-							notifier.fireTestIgnored(testDescription);
-						}
-					} catch (Throwable t) {
-						notifier.fireTestFailure(new Failure(testDescription, t));
-					}
+					continue;
+				}
+				FileTester tester;
+				try {
+					tester = runTest(content, data.getMain(), data.getAlias(), test.getKey());
+				} catch (IOException e) {
+					notifier.fireTestStarted(testDescription);
+					notifier.fireTestFailure(new Failure(testDescription, e));
+					continue;
+				}
+				if (tester == null) {
+					notifier.fireTestIgnored(testDescription);
+					continue;
+				}
+				try {
+					notifier.fireTestStarted(testDescription);
+					tester.runTest();
+				} catch (Throwable t) {
+					notifier.fireTestFailure(new Failure(testDescription, t));
 				}
 				notifier.fireTestFinished(testDescription);
 			}
@@ -350,6 +362,10 @@ public class RunForEachFileInDirRunner extends Runner {
 		for (Method m : afterClassMethods) {
 			runClassMethod(m);
 		}
+	}
+	
+	public interface FileTester {
+		void runTest() throws Throwable;
 	}
 	
 	private void runClassMethod(Method m) {
@@ -366,10 +382,10 @@ public class RunForEachFileInDirRunner extends Runner {
 		}
 	}
 	
-	private boolean runTest(String rawSource, File main, File alias, Method method) throws Throwable {
+	private FileTester runTest(String rawSource, File main, File alias, final Method method) throws IOException {
 		Class<?>[] paramTypes = method.getParameterTypes();
 		Object[] params;
-		Test t = method.getAnnotation(Test.class);
+		final Test t = method.getAnnotation(Test.class);
 		
 		switch (paramTypes.length) {
 		case 0:
@@ -377,14 +393,14 @@ public class RunForEachFileInDirRunner extends Runner {
 			params = new Object[0];
 			break;
 		case 1:
-			if (alias != null) return false;
+			if (alias != null) return null;
 			if (paramTypes[0] == String.class) params = new Object[] {rawSource};
 			else if (paramTypes[0] == File.class) params = new Object[] {main};
 			else if (paramTypes[0] == Source.class) params = new Object[] {new Source(rawSource, main.getAbsolutePath())};
-			else return false;
+			else return null;
 			break;
 		case 2:
-			if (alias == null) return false;
+			if (alias == null) return null;
 			params = new Object[2];
 			main = new File(main.getParent(), alias.getName().replaceAll("\\.\\d+\\.java$", ".java"));
 			
@@ -393,38 +409,39 @@ public class RunForEachFileInDirRunner extends Runner {
 			if (paramTypes[0] == String.class) params[0] = expectedContent;
 			else if (paramTypes[0] == File.class) params[0] = main;
 			else if (paramTypes[0] == Source.class) params[0] = new Source(expectedContent, main.getAbsolutePath());
-			else return false;
+			else return null;
 			
 			if (paramTypes[1] == String.class) params[1] = rawSource;
 			else if (paramTypes[1] == File.class) params[1] = alias;
 			else if (paramTypes[1] == Source.class) params[1] = new Source(rawSource, alias.getAbsolutePath());
-			else return false;
+			else return null;
 			
 			break;
 		default:
-			return false;
+			return null;
 		}
 		
-		Object instance = testClass.newInstance();
-		
-		if (t != null && t.expected() != None.class) {
-			try {
-				Object executed = method.invoke(instance, params);
-				if (executed instanceof Boolean && !(Boolean)executed) return false;
-				Assert.fail("Expected exception: " + t.expected().getName());
-			} catch (InvocationTargetException e) {
-				if (t.expected().isInstance(e.getCause())) return true;
-				throw e.getCause();
+		final Object[] actualParams = params;
+		return new FileTester() {
+			@Override public void runTest() throws Throwable {
+				Object instance = testClass.newInstance();
+				
+				if (t != null && t.expected() != None.class) {
+					try {
+						method.invoke(instance, actualParams);
+						Assert.fail("Expected exception: " + t.expected().getName());
+					} catch (InvocationTargetException e) {
+						if (t.expected().isInstance(e.getCause())) return;
+						throw e.getCause();
+					}
+				} else {
+					try {
+						method.invoke(instance, actualParams);
+					} catch (InvocationTargetException e) {
+						throw e.getCause();
+					}
+				}
 			}
-		} else {
-			try {
-				Object executed = method.invoke(instance, params);
-				if (executed instanceof Boolean && !(Boolean)executed) return false;
-			} catch (InvocationTargetException e) {
-				throw e.getCause();
-			}
-		}
-		
-		return true;
+		};
 	}
 }
