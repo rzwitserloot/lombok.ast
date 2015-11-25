@@ -1320,6 +1320,9 @@ class AnnotationMethodDeclarationTemplate {
 	@Mandatory("new lombok.ast.Identifier()") @ForcedType Identifier methodName4;
 	Expression defaultValue5;
 	
+	@NotChildOfNode
+	int explicitArrayDimensions6;
+	
 	@CopyMethod
 	static String getDescription(AnnotationMethodDeclaration self) {
 		return self.astMethodName().astValue();
@@ -1338,6 +1341,9 @@ class MethodDeclarationTemplate {
 	@ParentAccessor("Parameter") List<VariableDefinition> parameters6;
 	List<TypeReference> thrownTypeReferences7;
 	@ParentAccessor Block body8;
+	
+	@NotChildOfNode
+	int explicitArrayDimensions9;
 	
 	@CopyMethod
 	static String getDescription(MethodDeclaration self) {

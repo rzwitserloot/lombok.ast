@@ -323,7 +323,7 @@ public class EcjTreeConverter {
 		TypeReference winner = null;
 		for (AbstractVariableDeclaration decl : decls) {
 			TypeReference tr = decl.type;
-			int newDims = tr.dimensions();
+			int newDims = tr.dimensions() - tr.extraDimensions();
 			if (newDims < dims) {
 				dims = newDims;
 				winner = tr;
@@ -337,7 +337,10 @@ public class EcjTreeConverter {
 		varDef.astTypeReference((lombok.ast.TypeReference) toTree(winner));
 		if ((first.type.bits & ASTNode.IsVarArgs) != 0) {
 			varDef.astVarargs(true);
+			varDef.astTypeReference().astArrayDimensions(dims - 1);
 			setConversionPositionInfo(varDef, "typeref", toPosition(first.type.sourceStart, first.type.sourceEnd));
+		} else {
+			varDef.astTypeReference().astArrayDimensions(dims);
 		}
 		
 		for (AbstractVariableDeclaration decl : decls) {
@@ -351,7 +354,7 @@ public class EcjTreeConverter {
 			setConversionPositionInfo(varDefEntry, "typeSourcePos", toPosition(decl.type.sourceStart, decl.type.sourceEnd));
 			varDefEntry.astInitializer((lombok.ast.Expression) toTree(decl.initialization));
 			varDefEntry.astName(toIdentifier(decl.name, decl.sourceStart, decl.sourceEnd));
-			int delta = decl.type.dimensions() - winner.dimensions();
+			int delta = decl.type.dimensions() - dims;
 			varDefEntry.astArrayDimensions(delta);
 			varDef.astVariables().addToEnd(varDefEntry);
 		}
@@ -455,6 +458,7 @@ public class EcjTreeConverter {
 			lombok.ast.ImportDeclaration imp = new lombok.ast.ImportDeclaration();
 			fillIdentifiers(node.tokens, node.sourcePositions, imp.astParts());
 			imp.astStarImport((node.bits & ASTNode.OnDemand) != 0);
+			setConversionPositionInfo(imp, "star", toPosition(node.trailingStarPosition, node.trailingStarPosition + 1));
 			imp.astStaticImport((node.modifiers & ClassFileConstants.AccStatic) != 0);
 			imp.setPosition(toPosition(node.declarationSourceStart, node.declarationSourceEnd));
 			set(node, imp);
@@ -757,7 +761,10 @@ public class EcjTreeConverter {
 		}
 		
 		@Override public void visitIntLiteralMinValue(IntLiteralMinValue node) {
-			visitIntLiteral(node);
+			String rawValue = String.valueOf(node.source());
+			boolean negative = !rawValue.startsWith("0");
+			lombok.ast.IntegralLiteral integral = new lombok.ast.IntegralLiteral().rawValue(rawValue);
+			set(node, setPosition(node, addUnaryMinusAsParent(negative, integral)));
 		}
 		
 		@Override public void visitLongLiteral(LongLiteral node) {
@@ -768,7 +775,10 @@ public class EcjTreeConverter {
 		}
 		
 		@Override public void visitLongLiteralMinValue(LongLiteralMinValue node) {
-			visitLongLiteral(node);
+			String rawValue = String.valueOf(node.source());
+			boolean negative = !rawValue.startsWith("0");
+			lombok.ast.IntegralLiteral integral = new lombok.ast.IntegralLiteral().rawValue(rawValue);
+			set(node, setPosition(node, addUnaryMinusAsParent(negative, integral)));
 		}
 		
 		@Override public void visitFloatLiteral(FloatLiteral node) {
@@ -1235,7 +1245,8 @@ public class EcjTreeConverter {
 			lombok.ast.Modifiers modifiers = toModifiers(node.modifiers, node.annotations, node.modifiersSourceStart, node.declarationSourceStart);
 			decl.astModifiers(modifiers);
 			decl.astReturnTypeReference((lombok.ast.TypeReference) toTree(node.returnType));
-			
+			decl.astExplicitArrayDimensions(node.returnType.extraDimensions());
+
 			boolean semiColonBody = ((node.modifiers & ExtraCompilerModifiers.AccSemicolonBody) != 0);
 			if (!modifiers.isAbstract() && !node.isNative() && !semiColonBody) {
 				lombok.ast.Block block = toBlock(node.statements);
@@ -1258,9 +1269,8 @@ public class EcjTreeConverter {
 			decl.astModifiers(toModifiers(node.modifiers, node.annotations, node.modifiersSourceStart, node.declarationSourceStart));
 			decl.astReturnTypeReference((lombok.ast.TypeReference) toTree(node.returnType));
 			decl.astDefaultValue((lombok.ast.Expression) toTree(node.defaultValue));
-			
+			decl.astExplicitArrayDimensions(node.extendedDimensions);
 			setConversionPositionInfo(decl, "signature", toPosition(node.sourceStart, node.sourceEnd));
-			setConversionPositionInfo(decl, "extendedDimensions", new Position(node.extendedDimensions, -1));
 			decl.setPosition(toPosition(node.declarationSourceStart, node.declarationSourceEnd));
 			set(node, decl);
 		}

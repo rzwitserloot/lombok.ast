@@ -88,6 +88,7 @@ public class StructuresActions extends SourceActions {
 		if (extraDims > 0 && returnType instanceof TypeReference) {
 			((TypeReference)returnType).astArrayDimensions(((TypeReference)returnType).astArrayDimensions() + extraDims);
 		}
+		decl.astExplicitArrayDimensions(extraDims);
 		decl.rawReturnTypeReference(returnType);
 		if (typeParameters instanceof TemporaryNode.OrphanedTypeVariables) {
 			TemporaryNode.OrphanedTypeVariables otv = (TemporaryNode.OrphanedTypeVariables)typeParameters;

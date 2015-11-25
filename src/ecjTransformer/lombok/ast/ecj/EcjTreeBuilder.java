@@ -39,6 +39,8 @@ import lombok.ast.AnnotationValueArray;
 import lombok.ast.AstVisitor;
 import lombok.ast.BinaryOperator;
 import lombok.ast.Comment;
+import lombok.ast.EnumConstant;
+import lombok.ast.ExpressionStatement;
 import lombok.ast.ForwardingAstVisitor;
 import lombok.ast.Identifier;
 import lombok.ast.JavadocContainer;
@@ -47,6 +49,7 @@ import lombok.ast.Modifiers;
 import lombok.ast.Node;
 import lombok.ast.Position;
 import lombok.ast.RawListAccessor;
+import lombok.ast.StrictListAccessor;
 import lombok.ast.UnaryOperator;
 import lombok.ast.VariableReference;
 import lombok.ast.grammar.SourceStructure;
@@ -526,6 +529,8 @@ public class EcjTreeBuilder {
 		private boolean set(lombok.ast.Node node, ASTNode value) {
 			if (result != null) throw new IllegalStateException("result is already set");
 			
+			if (node != null && node.getParent() instanceof ExpressionStatement) value.bits |= ASTNode.InsideExpressionStatement;
+			
 			if (node instanceof lombok.ast.Expression) {
 				int parens = ((lombok.ast.Expression)node).getIntendedParens();
 				value.bits |= (parens << ASTNode.ParenthesizedSHIFT) & ASTNode.ParenthesizedMASK;
@@ -564,7 +569,7 @@ public class EcjTreeBuilder {
 		@Override
 		public boolean visitPackageDeclaration(lombok.ast.PackageDeclaration node) {
 			long[] pos = partsToPosArray(node.rawParts());
-			ImportReference pkg = new ImportReference(chain(node.astParts()), pos, true, ClassFileConstants.AccDefault);
+			ImportReference pkg = new ImportReference(chain(node.astParts()), pos, false, ClassFileConstants.AccDefault);
 			pkg.annotations = toArray(Annotation.class, node.astAnnotations());
 			pkg.declarationSourceStart = jstart(node);
 			pkg.declarationSourceEnd = pkg.declarationEnd = end(node);
@@ -581,6 +586,14 @@ public class EcjTreeBuilder {
 			ImportReference imp = new ImportReference(chain(node.astParts()), pos, node.astStarImport(), staticFlag);
 			imp.declarationSourceStart = start(node);
 			imp.declarationSourceEnd = imp.declarationEnd = end(node);
+			if (node.astStarImport()) {
+				Position position = getConversionPositionInfo(node, "star");
+				if (position == null ) {
+					imp.trailingStarPosition = imp.declarationEnd - 1;
+				} else {
+					imp.trailingStarPosition = position.getStart();
+				}
+			}
 			return set(node, imp);
 		}
 		
@@ -668,7 +681,7 @@ public class EcjTreeBuilder {
 				fields = toArray(FieldDeclaration.class, node.astBody().astConstants());
 			}
 			TypeDeclaration decl = createTypeBody(node.astBody().astMembers(), node, true, ClassFileConstants.AccEnum, fields);
-			
+			decl.enumConstantsCounter = fields == null ? 0 : fields.length;
 			decl.annotations = toArray(Annotation.class, node.astModifiers().astAnnotations());
 			decl.superInterfaces = toArray(TypeReference.class, node.astImplementing());
 			
@@ -688,7 +701,14 @@ public class EcjTreeBuilder {
 			//TODO check where the javadoc and annotations go: the field or the type
 			
 			FieldDeclaration decl = new FieldDeclaration();
-			decl.annotations = toArray(Annotation.class, node.astAnnotations());
+			StrictListAccessor<lombok.ast.Annotation, EnumConstant> annotations = node.astAnnotations();
+			for (lombok.ast.Annotation a : annotations) {
+				if (a.toString().equals("@Deprecated")) {
+					decl.bits |= ClassFileConstants.AccDeprecated;
+					break;
+				}
+			}
+			decl.annotations = toArray(Annotation.class, annotations);
 			decl.name = toName(node.astName());
 			
 			decl.sourceStart = start(node.astName());
@@ -715,6 +735,8 @@ public class EcjTreeBuilder {
 				init = new QualifiedAllocationExpression(type);
 				init.enumConstant = decl;
 			}
+			init.sourceStart = decl.declarationSourceStart;
+			init.sourceEnd = decl.declarationSourceEnd;
 			init.arguments = toArray(Expression.class, node.astArguments());
 			decl.initialization = init;
 			
@@ -848,6 +870,7 @@ public class EcjTreeBuilder {
 			decl.annotations = toArray(Annotation.class, node.astModifiers().astAnnotations());
 			decl.modifiers = toModifiers(node.astModifiers());
 			decl.returnType = (TypeReference) toTree(node.astReturnTypeReference());
+			setExtendedDimensions(decl.returnType, node.astExplicitArrayDimensions());
 			if (setOriginalPosOnType) {
 				if (decl.returnType instanceof ArrayTypeReference) {
 					((ArrayTypeReference)decl.returnType).originalSourceEnd = end(node.rawReturnTypeReference());
@@ -857,6 +880,7 @@ public class EcjTreeBuilder {
 			decl.arguments = toArray(Argument.class, node.astParameters());
 			decl.selector = toName(node.astMethodName());
 			decl.thrownExceptions = toArray(TypeReference.class, node.astThrownTypeReferences());
+			
 			if (node.astBody() == null) {
 				decl.modifiers |= ExtraCompilerModifiers.AccSemicolonBody;
 			} else {
@@ -888,13 +912,11 @@ public class EcjTreeBuilder {
 			boolean setOriginalPosOnType = false;
 			/* set sourceEnd */ {
 				Position ecjSigPos = getConversionPositionInfo(node, "signature");
-				Position ecjExtDimPos = getConversionPositionInfo(node, "extendedDimensions");
-				if (ecjSigPos != null && ecjExtDimPos != null) {
+				decl.extendedDimensions = node.astExplicitArrayDimensions();
+				if (ecjSigPos != null) {
 					decl.sourceEnd = ecjSigPos.getEnd() - 1;
-					decl.extendedDimensions = ecjExtDimPos.getStart();
 				} else {
 					decl.sourceEnd = posOfStructure(node, ")", false) - 1;
-					decl.extendedDimensions = countStructure(node, "]");
 					if (decl.extendedDimensions > 0) {
 						decl.sourceEnd = posOfStructure(node, "]", false) - 1;
 						setOriginalPosOnType = true;
@@ -1427,8 +1449,10 @@ public class EcjTreeBuilder {
 		@Override
 		public boolean visitIntegralLiteral(lombok.ast.IntegralLiteral node) {
 			if (node.astMarkedAsLong()) {
+				if (node.astLongValue() == Long.MIN_VALUE) return set(node, new LongLiteralMinValue(node.rawValue().toCharArray(), null, start(node), end(node)));
 				return set(node, LongLiteral.buildLongLiteral(node.rawValue().toCharArray(), start(node), end(node)));
 			}
+			if (node.astIntValue() == Integer.MIN_VALUE) return set(node, new IntLiteralMinValue(node.rawValue().toCharArray(), null, start(node), end(node)));
 			return set(node, IntLiteral.buildIntLiteral(node.rawValue().toCharArray(), start(node), end(node)));
 		}
 		
@@ -1578,10 +1602,14 @@ public class EcjTreeBuilder {
 		
 		@Override
 		public boolean visitForEach(lombok.ast.ForEach node) {
-			ForeachStatement forEach = new ForeachStatement((LocalDeclaration) toTree(node.astVariable()), start(node));
+			LocalDeclaration variable = (LocalDeclaration) toTree(node.astVariable());
+			ForeachStatement forEach = new ForeachStatement(variable, start(node));
 			forEach.sourceEnd = end(node);
 			forEach.collection = toExpression(node.astIterable());
 			forEach.action = toStatement(node.astStatement());
+			
+			variable.declarationEnd = variable.declarationSourceEnd = forEach.collection.sourceEnd;
+			variable.bits |= ASTNode.IsForeachElementVariable;
 			return set(node, forEach);
 		}
 		
@@ -1610,13 +1638,13 @@ public class EcjTreeBuilder {
 					decl.type = base;
 				} else if (entry.astArrayDimensions() > 0 || node.astVarargs()) {
 					decl.type = (TypeReference) toTree(entry.getEffectiveTypeReference());
+					setExtendedDimensions(decl.type, entry.astArrayDimensions());
 					decl.type.sourceStart = base.sourceStart;
 					Position ecjTypeSourcePos = getConversionPositionInfo(entry, "typeSourcePos");
 					if (ecjTypeSourcePos != null) {
 						decl.type.sourceEnd = ecjTypeSourcePos.getEnd() - 1;
 					} else {
-						// This makes no sense whatsoever but eclipse wants it this way.
-						if (firstDecl == null && (base.dimensions() > 0 || node.getParent() instanceof lombok.ast.ForEach)) {
+						if (firstDecl == null && base.dimensions() > 0) {
 							decl.type.sourceEnd = posOfStructure(entry, "]", false) - 1;
 						} else if (firstDecl != null) {
 							// This replicates an eclipse bug; the end pos of the type of b in: int[] a[][], b[]; is in fact the second closing ] of a.
@@ -1693,6 +1721,11 @@ public class EcjTreeBuilder {
 			return set(node, values);
 		}
 		
+		private void setExtendedDimensions(TypeReference type, int dimensions) {
+			if (type instanceof ArrayTypeReference) ((ArrayTypeReference) type).extendedDimensions = dimensions;
+			if (type instanceof ArrayQualifiedTypeReference) ((ArrayQualifiedTypeReference) type).extendedDimensions = dimensions;
+		}
+
 		@Override
 		public boolean visitIf(lombok.ast.If node) {
 			if (node.astElseStatement() == null) {
@@ -1759,6 +1792,7 @@ public class EcjTreeBuilder {
 				int i = 0;
 				for (lombok.ast.Catch c : node.astCatches()) {
 					tryStatement.catchArguments[i] = (Argument)toTree(c.astExceptionDeclaration());
+					tryStatement.catchArguments[i].bits &= ~ASTNode.IsArgument;
 					tryStatement.catchBlocks[i] = (Block) toTree(c.astBody());
 					i++;
 				}
