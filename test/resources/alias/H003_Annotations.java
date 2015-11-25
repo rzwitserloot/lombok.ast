@@ -6,7 +6,7 @@ public @ interface H003_Annotations {
 @ interface ComplexAnnotation {
     int x = 10;
     
-    String v1()[];
+    String  [] v1();
     
     Class<?> clazz() default Object.class;
     
@@ -14,5 +14,5 @@ public @ interface H003_Annotations {
     
     public abstract H003_Annotations ann();
     
-    String v2  ( )  [ ]   default   {  "a"  ,  "b"  ,  "c"  }  ;
+    String  [ ]  v2 ( )    default   {  "a"  ,  "b"  ,  "c"  }  ;
 }
