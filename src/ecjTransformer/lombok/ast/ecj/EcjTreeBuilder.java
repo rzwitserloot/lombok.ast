@@ -53,6 +53,7 @@ import lombok.ast.StrictListAccessor;
 import lombok.ast.UnaryOperator;
 import lombok.ast.VariableReference;
 import lombok.ast.grammar.SourceStructure;
+import lombok.ast.resolve.Resolver;
 
 import org.eclipse.jdt.core.compiler.CategorizedProblem;
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -703,7 +704,8 @@ public class EcjTreeBuilder {
 			FieldDeclaration decl = new FieldDeclaration();
 			StrictListAccessor<lombok.ast.Annotation, EnumConstant> annotations = node.astAnnotations();
 			for (lombok.ast.Annotation a : annotations) {
-				if (a.toString().equals("@Deprecated")) {
+				lombok.ast.TypeReference aType = a.astAnnotationTypeReference();
+				if (aType.astParts().last().astIdentifier().astValue().equals("Deprecated") && new Resolver().typesMatch("java.lang.Deprecated", aType)) {
 					decl.bits |= ClassFileConstants.AccDeprecated;
 					break;
 				}
