@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2011 The Project Lombok Authors.
+ * Copyright (C) 2010-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,9 +21,12 @@
  */
 package lombok.ast.ecj;
 
+import static lombok.ast.ConversionPositionInfo.getConversionPositionInfo;
+
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -50,9 +53,9 @@ import lombok.ast.Node;
 import lombok.ast.Position;
 import lombok.ast.RawListAccessor;
 import lombok.ast.StrictListAccessor;
+import lombok.ast.StructuralElement;
 import lombok.ast.UnaryOperator;
 import lombok.ast.VariableReference;
-import lombok.ast.grammar.SourceStructure;
 import lombok.ast.resolve.Resolver;
 
 import org.eclipse.jdt.core.compiler.CategorizedProblem;
@@ -158,11 +161,6 @@ import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-
-import static lombok.ast.ConversionPositionInfo.getConversionPositionInfo;
-
 /**
  * Turns {@code lombok.ast} based ASTs into eclipse/ecj's {@code org.eclipse.jdt.internal.compiler.ast.ASTNode} model.
  */
@@ -170,7 +168,7 @@ public class EcjTreeBuilder {
 	private static final int VISIBILITY_MASK = 7;
 	static final char[] PACKAGE_INFO = "package-info".toCharArray();
 	
-	private final Map<lombok.ast.Node, Collection<SourceStructure>> sourceStructures;
+	private final Map<lombok.ast.Node, Collection<StructuralElement>> sourceStructures;
 	private List<? extends ASTNode> result = null;
 	private final String rawInput;
 	private final ProblemReporter reporter;
@@ -255,8 +253,8 @@ public class EcjTreeBuilder {
 		}
 	};
 	
-	public EcjTreeBuilder(lombok.ast.grammar.Source source, CompilerOptions options) {
-		this(source, createDefaultProblemReporter(options), createSilentProblemReporter(options), new CompilationResult(source.getName().toCharArray(), 0, 0, 0));
+	public EcjTreeBuilder(String rawInput, Map<lombok.ast.Node, Collection<StructuralElement>> structuralElements, String name, CompilerOptions options) {
+		this(rawInput, structuralElements, createDefaultProblemReporter(options), createSilentProblemReporter(options), new CompilationResult(name.toCharArray(), 0, 0, 0));
 	}
 	
 	public EcjTreeBuilder(String rawInput, String name, CompilerOptions options) {
@@ -297,10 +295,10 @@ public class EcjTreeBuilder {
 		}, options, SILENT_PROBLEM_FACTORY);
 	}
 	
-	public EcjTreeBuilder(lombok.ast.grammar.Source source, ProblemReporter reporter, ProblemReporter silentProblemReporter, CompilationResult compilationResult) {
+	public EcjTreeBuilder(String rawInput, Map<lombok.ast.Node, Collection<StructuralElement>> structuralElements, ProblemReporter reporter, ProblemReporter silentProblemReporter, CompilationResult compilationResult) {
 		this.options = reporter.options;
-		this.sourceStructures = source.getSourceStructures();
-		this.rawInput = source.getRawInput();
+		this.rawInput = rawInput;
+		this.sourceStructures = structuralElements;
 		this.reporter = reporter;
 		this.silentProblemReporter = silentProblemReporter;
 		this.compilationResult = compilationResult;
@@ -308,8 +306,8 @@ public class EcjTreeBuilder {
 	
 	public EcjTreeBuilder(String rawInput, ProblemReporter reporter, ProblemReporter silentProblemReporter, CompilationResult compilationResult) {
 		this.options = reporter.options;
-		this.sourceStructures = null;
 		this.rawInput = rawInput;
+		this.sourceStructures = null;
 		this.reporter = reporter;
 		this.silentProblemReporter = silentProblemReporter;
 		this.compilationResult = compilationResult;
@@ -320,8 +318,8 @@ public class EcjTreeBuilder {
 		this.silentProblemReporter = parent.silentProblemReporter;
 		this.options = parent.options;
 		this.rawInput = parent.rawInput;
-		this.compilationResult = parent.compilationResult;
 		this.sourceStructures = parent.sourceStructures;
+		this.compilationResult = parent.compilationResult;
 	}
 	
 	private EcjTreeBuilder create() {
@@ -368,7 +366,7 @@ public class EcjTreeBuilder {
 	}
 	
 	private <T extends ASTNode> T[] toArray(Class<T> type, lombok.ast.StrictListAccessor<?, ?> accessor) {
-		List<T> list = Lists.newArrayList();
+		List<T> list = new ArrayList<T>();
 		for (lombok.ast.Node node : accessor) {
 			EcjTreeBuilder newBuilder = create();
 			node.accept(newBuilder.visitor);
@@ -390,13 +388,13 @@ public class EcjTreeBuilder {
 	}
 	
 	private <T extends ASTNode> List<T> toList(Class<T> type, lombok.ast.Node node) {
-		if (node == null) return Lists.newArrayList();
+		if (node == null) return new ArrayList<T>();
 		EcjTreeBuilder newBuilder = create();
 		node.accept(newBuilder.visitor);
 		bubblingFlags.addAll(newBuilder.bubblingFlags);
 		@SuppressWarnings("unchecked")
 		List<T> all = (List<T>)newBuilder.getAll();
-		return Lists.newArrayList(all);
+		return new ArrayList<T>(all);
 	}
 	
 	public void visit(lombok.ast.Node node) {
@@ -437,7 +435,7 @@ public class EcjTreeBuilder {
 		return false;
 	}
 	
-	private static final EnumMap<UnaryOperator, Integer> UNARY_OPERATORS = Maps.newEnumMap(UnaryOperator.class);
+	private static final EnumMap<UnaryOperator, Integer> UNARY_OPERATORS = new EnumMap<UnaryOperator, Integer>(UnaryOperator.class);
 	static {
 		UNARY_OPERATORS.put(UnaryOperator.BINARY_NOT, OperatorIds.TWIDDLE);
 		UNARY_OPERATORS.put(UnaryOperator.LOGICAL_NOT, OperatorIds.NOT); 
@@ -449,7 +447,7 @@ public class EcjTreeBuilder {
 		UNARY_OPERATORS.put(UnaryOperator.POSTFIX_DECREMENT, OperatorIds.MINUS);
 	}
 	
-	private static final EnumMap<BinaryOperator, Integer> BINARY_OPERATORS = Maps.newEnumMap(BinaryOperator.class);
+	private static final EnumMap<BinaryOperator, Integer> BINARY_OPERATORS = new EnumMap<BinaryOperator, Integer>(BinaryOperator.class);
 	static {
 		BINARY_OPERATORS.put(BinaryOperator.PLUS_ASSIGN, OperatorIds.PLUS);
 		BINARY_OPERATORS.put(BinaryOperator.MINUS_ASSIGN, OperatorIds.MINUS);
@@ -540,7 +538,7 @@ public class EcjTreeBuilder {
 			if (value instanceof NameReference) {
 				updateRestrictionFlags(node, (NameReference)value);
 			}
-			List<ASTNode> result = Lists.newArrayList();
+			List<ASTNode> result = new ArrayList<ASTNode>();
 			if (value != null) result.add(value);
 			EcjTreeBuilder.this.result = result;
 			
@@ -969,9 +967,9 @@ public class EcjTreeBuilder {
 			decl.bodyEnd = end(members.owner());
 			
 			boolean hasExplicitConstructor = false;
-			List<AbstractMethodDeclaration> methods = Lists.newArrayList();
-			List<FieldDeclaration> fields = Lists.newArrayList();
-			List<TypeDeclaration> types = Lists.newArrayList();
+			List<AbstractMethodDeclaration> methods = new ArrayList<AbstractMethodDeclaration>();
+			List<FieldDeclaration> fields = new ArrayList<FieldDeclaration>();
+			List<TypeDeclaration> types = new ArrayList<TypeDeclaration>();
 			
 			if (initialFields != null) fields.addAll(Arrays.asList(initialFields));
 			
@@ -1277,8 +1275,8 @@ public class EcjTreeBuilder {
 		public boolean visitSelect(lombok.ast.Select node) {
 			//TODO for something like ("" + "").foo.bar;
 			/* try chain-of-identifiers */ {
-				List<lombok.ast.Identifier> selects = Lists.newArrayList();
-				List<Long> pos = Lists.newArrayList();
+				List<lombok.ast.Identifier> selects = new ArrayList<lombok.ast.Identifier>();
+				List<Long> pos = new ArrayList<Long>();
 				lombok.ast.Select current = node;
 				while (true) {
 					selects.add(current.astIdentifier());
@@ -1338,7 +1336,7 @@ public class EcjTreeBuilder {
 			if (!qualified) {
 				singleName = toName(node.astParts().first().astIdentifier());
 			} else {
-				List<lombok.ast.Identifier> identifiers = Lists.newArrayList();
+				List<lombok.ast.Identifier> identifiers = new ArrayList<lombok.ast.Identifier>();
 				for (lombok.ast.TypeReferencePart part : node.astParts()) identifiers.add(part.astIdentifier());
 				qualifiedName = chain(identifiers, identifiers.size());
 			}
@@ -1624,7 +1622,7 @@ public class EcjTreeBuilder {
 		
 		@Override
 		public boolean visitVariableDefinition(lombok.ast.VariableDefinition node) {
-			List<AbstractVariableDeclaration> values = Lists.newArrayList();
+			List<AbstractVariableDeclaration> values = new ArrayList<AbstractVariableDeclaration>();
 			Annotation[] annotations = toArray(Annotation.class, node.astModifiers().astAnnotations());
 			int modifiers = toModifiers(node.astModifiers());
 			TypeReference base = (TypeReference) toTree(node.astTypeReference());
@@ -2036,7 +2034,7 @@ public class EcjTreeBuilder {
 	private int countStructure(lombok.ast.Node node, String structure) {
 		int result = 0;
 		if (sourceStructures != null && sourceStructures.containsKey(node)) {
-			for (SourceStructure struct : sourceStructures.get(node)) {
+			for (StructuralElement struct : sourceStructures.get(node)) {
 				if (structure.equals(struct.getContent())) result++;
 			}
 		}
@@ -2054,7 +2052,7 @@ public class EcjTreeBuilder {
 		Integer result = null;
 		
 		if (sourceStructures != null && sourceStructures.containsKey(node)) {
-			for (SourceStructure struct : sourceStructures.get(node)) {
+			for (StructuralElement struct : sourceStructures.get(node)) {
 				if (structure.equals(struct.getContent())) {
 					result = atStart ? struct.getPosition().getStart() : struct.getPosition().getEnd();
 					if (idx-- <= 0) break;

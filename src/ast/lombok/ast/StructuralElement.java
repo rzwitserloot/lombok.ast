@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,21 +21,22 @@
  */
 package lombok.ast;
 
-public interface RawListAccessor<T extends Node, P extends Node> extends Iterable<Node> {
-	P up();
-	Node owner();
-	void clear();
-	boolean isEmpty();
-	int size();
-	Node first();
-	Node last();
-	boolean contains(Node source);
-	P migrateAllFrom(RawListAccessor<?, ?> otherList);
-	P addToStart(Node... node);
-	P addToEnd(Node... node);
-	P addBefore(Node ref, Node... node);
-	P addAfter(Node ref, Node... node);
-	boolean replace(Node source, Node replacement);
-	boolean remove(Node source);
-	StrictListAccessor<T, P> asStrictAccessor();
+/**
+ * Contains the position and content of structural source elements.
+ * <p>
+ * Examples of structural elements:
+ * <ul>
+ *   <li>Parenthesis: ( and )</li>
+ *   <li>Arrays: [ and ]</li>
+ *   <li>Vararg parameters: ...</li>
+ *   <li>Star imports: *</li>
+ *   <li>Annotations: {@code @}</li>
+ *   <li>Generics: {@code <} and {@code >}</li>
+ * </ul>
+ */
+public interface StructuralElement {
+	
+	Position getPosition();
+	
+	String getContent();
 }

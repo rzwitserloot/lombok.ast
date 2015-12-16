@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -52,19 +52,19 @@ class ListAccessor<T extends Node, P extends Node> {
 	
 	public static <T extends Node, P extends Node> StrictListAccessor<T, P> emptyStrict(final String listName, final P returnAsParent) {
 		return new StrictListAccessor<T, P>() {
-			@Override public P addAfter(Node ref, T... node) {
+			@Override public P addAfter(Node ref, T node) {
 				throw new UnsupportedOperationException();
 			}
 			
-			@Override public P addBefore(Node ref, T... node) {
+			@Override public P addBefore(Node ref, T node) {
 				throw new UnsupportedOperationException();
 			}
 			
-			@Override public P addToEnd(T... node) {
+			@Override public P addToEnd(T node) {
 				throw new UnsupportedOperationException();
 			}
 			
-			@Override public P addToStart(T... node) {
+			@Override public P addToStart(T node) {
 				throw new UnsupportedOperationException();
 			}
 			
@@ -124,19 +124,19 @@ class ListAccessor<T extends Node, P extends Node> {
 	
 	public static <T extends Node, P extends Node> RawListAccessor<T, P> emptyRaw(final String listName, final P returnAsParent) {
 		return new RawListAccessor<T, P>() {
-			@Override public P addAfter(Node ref, Node... node) {
+			@Override public P addAfter(Node ref, Node node) {
 				throw new UnsupportedOperationException();
 			}
 			
-			@Override public P addBefore(Node ref, Node... node) {
+			@Override public P addBefore(Node ref, Node node) {
 				throw new UnsupportedOperationException();
 			}
 			
-			@Override public P addToEnd(Node... node) {
+			@Override public P addToEnd(Node node) {
 				throw new UnsupportedOperationException();
 			}
 			
-			@Override public P addToStart(Node... node) {
+			@Override public P addToStart(Node node) {
 				throw new UnsupportedOperationException();
 			}
 			
@@ -265,48 +265,40 @@ class ListAccessor<T extends Node, P extends Node> {
 		}
 		
 		@Override
-		public P addToStart(Node... node) {
-			for (int i = node.length - 1; i >= 0; i--) {
-				AbstractNode child = (AbstractNode)node[i];
-				if (child != null) {
-					parent.adopt(child);
-					fixEscaped();
-					list.add(0, child);
-				}
+		public P addToStart(Node node) {
+			AbstractNode child = (AbstractNode)node;
+			if (child != null) {
+				parent.adopt(child);
+				fixEscaped();
+				list.add(0, child);
 			}
 			return returnAsParent;
 		}
 		
 		@Override
-		public P addToEnd(Node... node) {
-			for (Node n : node) {
-				AbstractNode child = (AbstractNode)n;
-				if (child != null) {
-					parent.adopt(child);
-					fixEscaped();
-					list.add(child);
-				}
+		public P addToEnd(Node node) {
+			AbstractNode child = (AbstractNode)node;
+			if (child != null) {
+				parent.adopt(child);
+				fixEscaped();
+				list.add(child);
 			}
 			return returnAsParent;
 		}
 		
 		@Override
-		public P addBefore(Node ref, Node... node) {
+		public P addBefore(Node ref, Node node) {
 			if (ref == null) throw new NullPointerException("ref");
 			parent.ensureParentage((AbstractNode)ref);
 			
 			for (int i = 0; i < list.size(); i++) {
 				if (list.get(i) == ref) {
-					int j = 0;
-					for (Node n : node) {
-						AbstractNode child = (AbstractNode)n;
-						if (child != null) {
-							child.ensureParentless();
-							parent.adopt(child);
-							fixEscaped();
-							list.add(i + j, child);
-							j++;
-						}
+					AbstractNode child = (AbstractNode)node;
+					if (child != null) {
+						child.ensureParentless();
+						parent.adopt(child);
+						fixEscaped();
+						list.add(i, child);
 					}
 					return returnAsParent;
 				}
@@ -315,22 +307,18 @@ class ListAccessor<T extends Node, P extends Node> {
 		}
 		
 		@Override
-		public P addAfter(Node ref, Node... node) {
+		public P addAfter(Node ref, Node node) {
 			if (ref == null) throw new NullPointerException("ref");
 			parent.ensureParentage((AbstractNode)ref);
 			
 			for (int i = 0; i < list.size(); i++) {
 				if (list.get(i) == ref) {
-					int j = 0;
-					for (Node n : node) {
-						AbstractNode child = (AbstractNode)n;
-						if (child != null) {
-							child.ensureParentless();
-							parent.adopt(child);
-							fixEscaped();
-							list.add(i + j + 1, child);
-							j++;
-						}
+					AbstractNode child = (AbstractNode)node;
+					if (child != null) {
+						child.ensureParentless();
+						parent.adopt(child);
+						fixEscaped();
+						list.add(i + 1, child);
 					}
 					return returnAsParent;
 				}
@@ -457,19 +445,19 @@ class ListAccessor<T extends Node, P extends Node> {
 			return returnAsParent;
 		}
 		
-		@Override public P addToStart(T... node) {
+		@Override public P addToStart(T node) {
 			return raw.addToStart(node);
 		}
 		
-		@Override public P addToEnd(T... node) {
+		@Override public P addToEnd(T node) {
 			return raw.addToEnd(node);
 		}
 		
-		@Override public P addBefore(Node ref, T... node) {
+		@Override public P addBefore(Node ref, T node) {
 			return raw.addBefore(ref, node);
 		}
 		
-		@Override public P addAfter(Node ref, T... node) {
+		@Override public P addAfter(Node ref, T node) {
 			return raw.addAfter(ref, node);
 		}
 		
@@ -587,22 +575,22 @@ class ListAccessor<T extends Node, P extends Node> {
 					return returnThisAsParent;
 				}
 				
-				@Override public Q addToStart(Node... node) {
+				@Override public Q addToStart(Node node) {
 					orig.addToStart(node);
 					return returnThisAsParent;
 				}
 				
-				@Override public Q addToEnd(Node... node) {
+				@Override public Q addToEnd(Node node) {
 					orig.addToEnd(node);
 					return returnThisAsParent;
 				}
 				
-				@Override public Q addBefore(Node ref, Node... node) {
+				@Override public Q addBefore(Node ref, Node node) {
 					orig.addBefore(ref, node);
 					return returnThisAsParent;
 				}
 				
-				@Override public Q addAfter(Node ref, Node... node) {
+				@Override public Q addAfter(Node ref, Node node) {
 					orig.addAfter(ref, node);
 					return returnThisAsParent;
 				}
@@ -664,22 +652,22 @@ class ListAccessor<T extends Node, P extends Node> {
 					return returnThisAsParent;
 				}
 				
-				@Override public Q addToStart(T... node) {
+				@Override public Q addToStart(T node) {
 					orig.addToStart(node);
 					return returnThisAsParent;
 				}
 				
-				@Override public Q addToEnd(T... node) {
+				@Override public Q addToEnd(T node) {
 					orig.addToEnd(node);
 					return returnThisAsParent;
 				}
 				
-				@Override public Q addBefore(Node ref, T... node) {
+				@Override public Q addBefore(Node ref, T node) {
 					orig.addBefore(ref, node);
 					return returnThisAsParent;
 				}
 				
-				@Override public Q addAfter(Node ref, T... node) {
+				@Override public Q addAfter(Node ref, T node) {
 					orig.addAfter(ref, node);
 					return returnThisAsParent;
 				}

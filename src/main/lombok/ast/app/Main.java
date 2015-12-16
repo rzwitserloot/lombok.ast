@@ -484,7 +484,7 @@ public class Main {
 	
 	private final Operation<Node, CompilationUnitDeclaration> lombokToEcj = new Operation<Node, CompilationUnitDeclaration>() {
 		@Override public CompilationUnitDeclaration process(Source source, Node in) throws ConversionProblem {
-			EcjTreeBuilder builder = new EcjTreeBuilder(source, ecjCompilerOptions());
+			EcjTreeBuilder builder = new EcjTreeBuilder(source.getRawInput(), source.getSourceStructures(), source.getName(), ecjCompilerOptions());
 			builder.visit(in);
 			ASTNode out = builder.get();
 			if (out instanceof CompilationUnitDeclaration) return (CompilationUnitDeclaration) out;

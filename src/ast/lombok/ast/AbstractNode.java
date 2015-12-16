@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2011 The Project Lombok Authors.
+ * Copyright (C) 2010-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,12 +23,11 @@ package lombok.ast;
 
 import static java.util.Collections.emptyList;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -152,7 +151,7 @@ abstract class AbstractNode implements Node {
 	
 	void addDanglingNode(Node dangling) {
 		if (dangling == null) return;
-		if (danglings == null) danglings = Lists.newArrayList();
+		if (danglings == null) danglings = new ArrayList<Node>();
 		danglings.add(dangling);
 	}
 	
@@ -165,7 +164,7 @@ abstract class AbstractNode implements Node {
 	}
 	
 	void addConversionPositionInfo(String key, Position position) {
-		if (conversionPositions == null) conversionPositions = Maps.newHashMap();
+		if (conversionPositions == null) conversionPositions = new HashMap<String, Position>();
 		conversionPositions.put(key, position);
 	}
 	
@@ -176,8 +175,8 @@ abstract class AbstractNode implements Node {
 	
 	public Node addMessage(Message message) {
 		if (messagesMap == null) {
-			messagesMap = Maps.newHashMap();
-			messages = Lists.newArrayList();
+			messagesMap = new HashMap<MessageKey, Message>();
+			messages = new ArrayList<Message>();
 		}
 		
 		if (message.getKey() == null) {
@@ -201,7 +200,7 @@ abstract class AbstractNode implements Node {
 	}
 	
 	abstract static class WithParens extends AbstractNode implements Expression {
-		private List<Position> parensPositions = Lists.newArrayList();
+		private List<Position> parensPositions = new ArrayList<Position>();
 		
 		@Override
 		public boolean needsParentheses() {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2010 The Project Lombok Authors.
+ * Copyright (C) 2009-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@ package lombok.ast.resolve;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 
 import lombok.ast.Annotation;
@@ -38,8 +39,6 @@ import lombok.ast.ResolutionException;
 import lombok.ast.StringLiteral;
 import lombok.ast.UnaryExpression;
 import lombok.ast.UnaryOperator;
-
-import com.google.common.collect.Lists;
 
 class AnnotationProxy implements InvocationHandler {
 	private final Resolver resolver;
@@ -138,9 +137,8 @@ class AnnotationProxy implements InvocationHandler {
 			expectedType = expectedType.getComponentType();
 		}
 		
-		List<Object> returnValues = Lists.newArrayList();
-		
-		List<String> classNames = Lists.newArrayList();
+		List<Object> returnValues = new ArrayList<Object>();
+		List<String> classNames = new ArrayList<String>();
 		AnnotationClassNotAvailableException classNotAvailable = null;
 		for (AnnotationElement elem : node.astElements()) {
 			if (!(elem.astName() == null && name.equals("value")) && !name.equals(elem.astName())) continue;

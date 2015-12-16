@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 The Project Lombok Authors.
+ * Copyright (C) 2009-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +25,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,11 +46,6 @@ import lombok.ast.Select;
 import lombok.ast.TypeBody;
 import lombok.ast.TypeDeclaration;
 import lombok.ast.TypeReference;
-
-import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 
 /**
  * Contains simplistic (guesstimations) resolution that doesn't require full resolution and symbol lookup but it isn't perfect.
@@ -80,7 +77,7 @@ public class Resolver {
 			case 0:
 				throw new ResolutionException(value, "empty");
 			default:
-				packageName = Joiner.on('.').join(chain.subList(0, chain.size() - 2));
+				packageName = chainDots(chain.subList(0, chain.size() - 2));
 			case 2:
 				typeName = chain.get(chain.size() - 2);
 			case 1:
@@ -105,18 +102,31 @@ public class Resolver {
 		throw new ResolutionException(value, "Not a valid value for enum " + enumClass.getSimpleName() + ": " + enumName);
 	}
 	
-	static final List<Class<?>> NUMERIC_PRIMITIVE_CLASSES = ImmutableList.<Class<?>>of(
-			long.class, int.class, short.class, byte.class, double.class, float.class, char.class);
-	static final Map<String, Class<?>> PRIMITIVE_CLASS_MAP = ImmutableMap.<String, Class<?>>builder()
-			.put("boolean", boolean.class)
-			.put("byte", byte.class)
-			.put("short", short.class)
-			.put("int", int.class)
-			.put("long", long.class)
-			.put("char", char.class)
-			.put("float", float.class)
-			.put("double", double.class)
-			.build();
+	private static String chainDots(List<String> elements) {
+		StringBuilder result = new StringBuilder();
+		for (int i = 0; i < elements.size(); i++) {
+			if (i != 0) result.append(".");
+			result.append(elements.get(i));
+		}
+		return result.toString();
+	}
+	
+	static final List<Class<?>> NUMERIC_PRIMITIVE_CLASSES = Collections.unmodifiableList(Arrays.<Class<?>>asList(
+			long.class, int.class, short.class, byte.class, double.class, float.class, char.class));
+	
+	static final Map<String, Class<?>> PRIMITIVE_CLASS_MAP;
+	static {
+		Map<String, Class<?>> map = new LinkedHashMap<String, Class<?>>();
+		map.put("boolean", boolean.class);
+		map.put("byte", byte.class);
+		map.put("short", short.class);
+		map.put("int", int.class);
+		map.put("long", long.class);
+		map.put("char", char.class);
+		map.put("float", float.class);
+		map.put("double", double.class);
+		PRIMITIVE_CLASS_MAP = Collections.unmodifiableMap(map);
+	}
 	
 	private static class ImportList {
 		final List<String> explicits = new ArrayList<String>();
@@ -321,7 +331,7 @@ public class Resolver {
 					cs[0] = Class.class.cast(m.invoke(annotation));
 				}
 				
-				List<String> result = Lists.newArrayList();
+				List<String> result = new ArrayList<String>();
 				for (Class<?> c : cs) result.add(c.getName());
 				return result;
 			} catch (AnnotationClassNotAvailableException e) {
@@ -337,7 +347,7 @@ public class Resolver {
 	}
 	
 	private List<String> unwrapSelectChain(Select s) {
-		List<String> list = Lists.newArrayList();
+		List<String> list = new ArrayList<String>();
 		while (s != null) {
 			list.add(s.astIdentifier().astValue());
 			Expression parent = s.astOperand();
@@ -349,7 +359,7 @@ public class Resolver {
 			} else if (parent == null) {
 				break;
 			} else {
-				throw new ResolutionException(parent, "Identifies expected here, not a " + parent.getClass().getSimpleName());
+				throw new ResolutionException(parent, "Identifier expected here, not a " + parent.getClass().getSimpleName());
 			}
 		}
 		

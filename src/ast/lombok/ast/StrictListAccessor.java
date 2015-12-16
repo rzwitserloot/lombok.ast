@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -33,10 +33,10 @@ public interface StrictListAccessor<T extends Node, P extends Node> extends Iter
 	T last();
 	boolean contains(Node source);
 	P migrateAllFrom(StrictListAccessor<? extends T, ?> otherList);
-	P addToStart(T... node);
-	P addToEnd(T... node);
-	P addBefore(Node ref, T... node);
-	P addAfter(Node ref, T... node);
+	P addToStart(T node);
+	P addToEnd(T node);
+	P addBefore(Node ref, T node);
+	P addAfter(Node ref, T node);
 	void replace(Node source, T replacement) throws NoSuchElementException;
 	void remove(Node source) throws NoSuchElementException;
 	RawListAccessor<T, P> asRawAccessor();

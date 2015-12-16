@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,8 +29,7 @@ import java.util.Set;
 
 import lombok.ast.DescribedNode;
 import lombok.ast.Node;
-import lombok.ast.grammar.Source;
-import lombok.ast.grammar.SourceStructure;
+import lombok.ast.StructuralElement;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
@@ -41,24 +40,24 @@ public class StructureFormatter implements SourceFormatter {
 	private final StringBuilder sb = new StringBuilder();
 	private final List<String> errors = Lists.newArrayList();
 	private int indent;
-	private final Map<Node, Collection<SourceStructure>> sourceStructures;
+	private final Map<Node, Collection<StructuralElement>> sourceStructures;
 	private String name, currentType;
 	private final String nodeFormatString;
 	private Set<String> propertySkipList = Sets.newHashSet();
 	
 	public static StructureFormatter formatterWithoutPositions() {
-		return new StructureFormatter(Collections.<Node, Collection<SourceStructure>>emptyMap(), false);
+		return new StructureFormatter(Collections.<Node, Collection<StructuralElement>>emptyMap(), false);
 	}
 	
 	public static StructureFormatter formatterWithPositions() {
-		return new StructureFormatter(Collections.<Node, Collection<SourceStructure>>emptyMap(), true);
+		return new StructureFormatter(Collections.<Node, Collection<StructuralElement>>emptyMap(), true);
 	}
 	
-	public static StructureFormatter formatterWithEverything(Source source) {
-		return new StructureFormatter(source.getSourceStructures(), true);
+	public static StructureFormatter formatterWithEverything(Map<Node, Collection<StructuralElement>> sourceStructures) {
+		return new StructureFormatter(sourceStructures, true);
 	}
 	
-	private StructureFormatter(Map<Node, Collection<SourceStructure>> sourceStructures, boolean printPositions) {
+	private StructureFormatter(Map<Node, Collection<StructuralElement>> sourceStructures, boolean printPositions) {
 		this.sourceStructures = sourceStructures;
 		this.nodeFormatString = printPositions ? "[%s %s%s (%d-%d)]\n" : "[%s %s%s]\n";
 	}
@@ -93,7 +92,7 @@ public class StructureFormatter implements SourceFormatter {
 		a(nodeFormatString, type, name, description, node.getPosition().getStart(), node.getPosition().getEnd());
 		indent++;
 		if (sourceStructures.containsKey(node)) {
-			for (SourceStructure struct : sourceStructures.get(node)) {
+			for (StructuralElement struct : sourceStructures.get(node)) {
 				a("STRUCT: %s (%d-%d)\n", struct.getContent(), struct.getPosition().getStart(), struct.getPosition().getEnd());
 			}
 		}

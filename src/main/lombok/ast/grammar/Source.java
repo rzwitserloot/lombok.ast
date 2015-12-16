@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +35,7 @@ import lombok.ast.ForwardingAstVisitor;
 import lombok.ast.JavadocContainer;
 import lombok.ast.Node;
 import lombok.ast.Position;
+import lombok.ast.StructuralElement;
 
 import org.parboiled.Context;
 import org.parboiled.RecoveringParseRunner;
@@ -61,7 +62,7 @@ public class Source {
 	private Map<org.parboiled.Node<Node>, Node> registeredStructures;
 	private Map<org.parboiled.Node<Node>, List<Comment>> registeredComments;
 	private String preprocessed;
-	private Map<Node, Collection<SourceStructure>> cachedSourceStructures;
+	private Map<Node, Collection<StructuralElement>> cachedSourceStructures;
 	private List<Integer> lineEndings;
 	
 	public Source(String rawInput, String name) {
@@ -205,29 +206,28 @@ public class Source {
 		registeredStructures.put(pNode, node);
 	}
 	
-	public Map<Node, Collection<SourceStructure>> getSourceStructures() {
+	public Map<Node, Collection<StructuralElement>> getSourceStructures() {
 		if (cachedSourceStructures != null) return cachedSourceStructures;
 		parseCompilationUnit();
-		ListMultimap<Node, SourceStructure> map = LinkedListMultimap.create();
+		ListMultimap<Node, StructuralElement> map = LinkedListMultimap.create();
 		
 		org.parboiled.Node<Node> pNode = parsingResult.parseTreeRoot;
 		
 		buildSourceStructures(pNode, null, map);
 		
-		Map<Node, Collection<SourceStructure>> result = map.asMap();
+		Map<Node, Collection<StructuralElement>> result = map.asMap();
 		
-		for (Collection<SourceStructure> structures : result.values()) {
-			for (SourceStructure structure : structures) {
-				structure.setPosition(new Position(
+		for (Collection<StructuralElement> structures : result.values()) {
+			for (StructuralElement structure : structures) {
+				((SourceStructure) structure).setPosition(new Position(
 						mapPosition(structure.getPosition().getStart()),
 						mapPosition(structure.getPosition().getEnd())));
 			}
 		}
-		
 		return cachedSourceStructures = result;
 	}
 	
-	private void addSourceStructure(ListMultimap<Node, SourceStructure> map, Node node, SourceStructure structure) {
+	private void addSourceStructure(ListMultimap<Node, StructuralElement> map, Node node, SourceStructure structure) {
 		if (structure.getPosition().size() > 0 && structure.getContent().trim().length() > 0 &&
 				!structure.getPosition().equals(node.getPosition())) {
 			
@@ -235,7 +235,7 @@ public class Source {
 		}
 	}
 	
-	private void buildSourceStructures(org.parboiled.Node<Node> pNode, Node owner, ListMultimap<Node, SourceStructure> map) {
+	private void buildSourceStructures(org.parboiled.Node<Node> pNode, Node owner, ListMultimap<Node, StructuralElement> map) {
 		Node target = registeredStructures.remove(pNode);
 		if (target != null || pNode.getChildren().isEmpty()) {
 			int start = pNode.getStartIndex();

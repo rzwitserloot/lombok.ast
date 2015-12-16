@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Project Lombok Authors.
+ * Copyright (C) 2010-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,9 @@
 package lombok.ast;
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -32,11 +35,6 @@ import lombok.ast.template.GenerateAstNode;
 import lombok.ast.template.Mandatory;
 import lombok.ast.template.NotChildOfNode;
 import lombok.ast.template.ParentAccessor;
-
-import com.google.common.collect.BiMap;
-import com.google.common.collect.ImmutableBiMap;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 
 class TypeMemberMixin {
 	@CopyMethod
@@ -209,7 +207,7 @@ class AnnotationTemplate {
 			if (key != null && elem.astName() != null && elem.astName().astValue().equals(key)) return elem.getValues();
 		}
 		
-		return ImmutableList.of();
+		return Collections.emptyList();
 	}
 }
 
@@ -231,13 +229,13 @@ class AnnotationElementTemplate {
 	
 	@CopyMethod
 	static List<Node> getValues(AnnotationElement self) {
-		if (self.rawValue() == null) return ImmutableList.of();
+		if (self.rawValue() == null) return Collections.emptyList();
 		if (self.rawValue() instanceof AnnotationValueArray) {
-			ImmutableList.Builder<Node> result = ImmutableList.builder();
+			List<Node> result = new ArrayList<Node>();
 			for (Node n : ((AnnotationValueArray)self.rawValue()).rawValues()) result.add(n);
-			return result.build();
+			return Collections.unmodifiableList(result);
 		}
-		return ImmutableList.of(self.rawValue());
+		return Collections.singletonList(self.rawValue());
 	}
 }
 
@@ -957,19 +955,23 @@ class ClassLiteralTemplate {
 
 @GenerateAstNode(implementing=DescribedNode.class)
 class KeywordModifierTemplate {
-	private static final BiMap<String, Integer> REFLECT_MODIFIERS = ImmutableBiMap.<String, Integer>builder()
-		.put("public", Modifier.PUBLIC)
-		.put("private", Modifier.PRIVATE)
-		.put("protected", Modifier.PROTECTED)
-		.put("static", Modifier.STATIC)
-		.put("final", Modifier.FINAL)
-		.put("synchronized", Modifier.SYNCHRONIZED)
-		.put("volatile", Modifier.VOLATILE)
-		.put("transient", Modifier.TRANSIENT)
-		.put("native", Modifier.NATIVE)
-		.put("abstract", Modifier.ABSTRACT)
-		.put("strictfp", Modifier.STRICT)
-		.build();
+	private static final Map<String, Integer> REFLECT_MODIFIERS = new LinkedHashMap<String, Integer>();
+	private static final Map<Integer, String> REFLECT_MODIFIERS_INVERSE = new LinkedHashMap<Integer, String>();
+	static {
+		REFLECT_MODIFIERS.put("public", Modifier.PUBLIC);
+		REFLECT_MODIFIERS.put("private", Modifier.PRIVATE);
+		REFLECT_MODIFIERS.put("protected", Modifier.PROTECTED);
+		REFLECT_MODIFIERS.put("static", Modifier.STATIC);
+		REFLECT_MODIFIERS.put("final", Modifier.FINAL);
+		REFLECT_MODIFIERS.put("synchronized", Modifier.SYNCHRONIZED);
+		REFLECT_MODIFIERS.put("volatile", Modifier.VOLATILE);
+		REFLECT_MODIFIERS.put("transient", Modifier.TRANSIENT);
+		REFLECT_MODIFIERS.put("native", Modifier.NATIVE);
+		REFLECT_MODIFIERS.put("abstract", Modifier.ABSTRACT);
+		REFLECT_MODIFIERS.put("strictfp", Modifier.STRICT);
+		
+		for (Map.Entry<String, Integer> entry : REFLECT_MODIFIERS.entrySet()) REFLECT_MODIFIERS_INVERSE.put(entry.getValue(), entry.getKey());
+	}
 	
 	@NotChildOfNode
 	@Mandatory("\"\"") String name1;
@@ -987,14 +989,14 @@ class KeywordModifierTemplate {
 	
 	@CopyMethod(isStatic=true)
 	static KeywordModifier fromReflectModifier(int modifierFlag) {
-		String keyword = REFLECT_MODIFIERS.inverse().get(modifierFlag);
+		String keyword = REFLECT_MODIFIERS_INVERSE.get(modifierFlag);
 		return keyword == null ? null : new KeywordModifier().astName(keyword);
 	}
 	
 	@CopyMethod(isStatic=true)
 	static List<KeywordModifier> fromReflectModifiers(int modifierFlags) {
-		List<KeywordModifier> list = Lists.newArrayList();
-		for (Map.Entry<Integer, String> entry : REFLECT_MODIFIERS.inverse().entrySet()) {
+		List<KeywordModifier> list = new ArrayList<KeywordModifier>();
+		for (Map.Entry<Integer, String> entry : REFLECT_MODIFIERS_INVERSE.entrySet()) {
 			if ((modifierFlags & entry.getKey()) != 0) list.add(KeywordModifier.fromReflectModifier(entry.getKey()));
 		}
 		

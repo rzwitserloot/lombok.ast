@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2011 The Project Lombok Authors.
+ * Copyright (C) 2010-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,12 @@
 package lombok.ast.javac;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import lombok.ast.AlternateConstructorInvocation;
@@ -93,6 +97,7 @@ import lombok.ast.Statement;
 import lombok.ast.StaticInitializer;
 import lombok.ast.StrictListAccessor;
 import lombok.ast.StringLiteral;
+import lombok.ast.StructuralElement;
 import lombok.ast.Super;
 import lombok.ast.SuperConstructorInvocation;
 import lombok.ast.Switch;
@@ -111,13 +116,7 @@ import lombok.ast.VariableDefinitionEntry;
 import lombok.ast.VariableReference;
 import lombok.ast.While;
 import lombok.ast.WildcardKind;
-import lombok.ast.grammar.Source;
-import lombok.ast.grammar.SourceStructure;
 
-import com.google.common.collect.BiMap;
-import com.google.common.collect.ImmutableBiMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.sun.tools.javac.code.BoundKind;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.TypeTags;
@@ -155,7 +154,7 @@ import static lombok.ast.ConversionPositionInfo.getConversionPositionInfo;
 public class JcTreeBuilder {
 	private final TreeMaker treeMaker;
 	private final Table table;
-	private final Map<Node, Collection<SourceStructure>> sourceStructures;
+	private final Map<Node, Collection<StructuralElement>> sourceStructures;
 	private final Map<JCTree, Integer> endPosTable;
 	
 	private List<? extends JCTree> result = null;
@@ -181,16 +180,14 @@ public class JcTreeBuilder {
 		} catch (Throwable t) {
 			// intentional do nothing
 		}
-		// DefaultFileManager.preRegister(c);
-		// JavacFileManager.preRegister(c);
 		return c;
 	}
 	
-	public JcTreeBuilder(Source source, Context context) {
-		this(source == null ? null : source.getSourceStructures(), TreeMaker.instance(context), Name.Table.instance(context), Maps.<JCTree, Integer>newHashMap());
+	public JcTreeBuilder(Map<Node, Collection<StructuralElement>> structures, Context context) {
+		this(structures, TreeMaker.instance(context), Name.Table.instance(context), new HashMap<JCTree, Integer>());
 	}
 	
-	private JcTreeBuilder(Map<Node, Collection<SourceStructure>> structures, TreeMaker treeMaker, Table nameTable, Map<JCTree, Integer> endPosTable) {
+	private JcTreeBuilder(Map<Node, Collection<StructuralElement>> structures, TreeMaker treeMaker, Table nameTable, Map<JCTree, Integer> endPosTable) {
 		if (treeMaker == null) throw new NullPointerException("treeMaker");
 		if (nameTable == null) throw new NullPointerException("nameTable");
 		this.treeMaker = treeMaker;
@@ -729,7 +726,7 @@ public class JcTreeBuilder {
 				return false;
 			}
 			
-			java.util.List<String> buffer = Lists.newArrayList();
+			java.util.List<String> buffer = new ArrayList<String>();
 			BinaryExpression current = node;
 			int start = Integer.MAX_VALUE;
 			while (true) {
@@ -823,7 +820,7 @@ public class JcTreeBuilder {
 		
 		@Override
 		public boolean visitArrayCreation(ArrayCreation node) {
-			java.util.List<Integer> typeTrees = Lists.newArrayList();
+			java.util.List<Integer> typeTrees = new ArrayList<Integer>();
 			int endPosOfTypeTree = 0;
 			List<JCExpression> dims = List.nil();
 			for (ArrayDimension dim : node.astDimensions()) {
@@ -1385,61 +1382,88 @@ public class JcTreeBuilder {
 		}
 	};
 	
-	static final BiMap<UnaryOperator, Integer> UNARY_OPERATORS = ImmutableBiMap.<UnaryOperator, Integer>builder()
-			.put(UnaryOperator.BINARY_NOT, JCTree.COMPL)
-			.put(UnaryOperator.LOGICAL_NOT, JCTree.NOT)
-			.put(UnaryOperator.UNARY_PLUS, JCTree.POS)
-			.put(UnaryOperator.PREFIX_INCREMENT, JCTree.PREINC)
-			.put(UnaryOperator.UNARY_MINUS, JCTree.NEG)
-			.put(UnaryOperator.PREFIX_DECREMENT, JCTree.PREDEC)
-			.put(UnaryOperator.POSTFIX_INCREMENT, JCTree.POSTINC)
-			.put(UnaryOperator.POSTFIX_DECREMENT, JCTree.POSTDEC)
-			.build();
+	private static final Map<UnaryOperator, Integer> UNARY_OPERATORS = new EnumMap<UnaryOperator, Integer>(UnaryOperator.class);
+	private static final Map<Integer, UnaryOperator> UNARY_OPERATORS_INVERSE = new LinkedHashMap<Integer, UnaryOperator>();
 	
-	static final BiMap<BinaryOperator, Integer> BINARY_OPERATORS = ImmutableBiMap.<BinaryOperator, Integer>builder()
-			.put(BinaryOperator.PLUS_ASSIGN, JCTree.PLUS_ASG)
-			.put(BinaryOperator.MINUS_ASSIGN, JCTree.MINUS_ASG)
-			.put(BinaryOperator.MULTIPLY_ASSIGN, JCTree.MUL_ASG)
-			.put(BinaryOperator.DIVIDE_ASSIGN, JCTree.DIV_ASG)
-			.put(BinaryOperator.REMAINDER_ASSIGN, JCTree.MOD_ASG)
-			.put(BinaryOperator.AND_ASSIGN, JCTree.BITAND_ASG)
-			.put(BinaryOperator.XOR_ASSIGN, JCTree.BITXOR_ASG)
-			.put(BinaryOperator.OR_ASSIGN, JCTree.BITOR_ASG)
-			.put(BinaryOperator.SHIFT_LEFT_ASSIGN, JCTree.SL_ASG)
-			.put(BinaryOperator.SHIFT_RIGHT_ASSIGN, JCTree.SR_ASG)
-			.put(BinaryOperator.BITWISE_SHIFT_RIGHT_ASSIGN, JCTree.USR_ASG)
-			.put(BinaryOperator.LOGICAL_OR, JCTree.OR)
-			.put(BinaryOperator.LOGICAL_AND, JCTree.AND)
-			.put(BinaryOperator.BITWISE_OR, JCTree.BITOR)
-			.put(BinaryOperator.BITWISE_XOR, JCTree.BITXOR)
-			.put(BinaryOperator.BITWISE_AND, JCTree.BITAND)
-			.put(BinaryOperator.EQUALS, JCTree.EQ)
-			.put(BinaryOperator.NOT_EQUALS, JCTree.NE)
-			.put(BinaryOperator.GREATER, JCTree.GT)
-			.put(BinaryOperator.GREATER_OR_EQUAL, JCTree.GE)
-			.put(BinaryOperator.LESS, JCTree.LT)
-			.put(BinaryOperator.LESS_OR_EQUAL, JCTree.LE)
-			.put(BinaryOperator.SHIFT_LEFT, JCTree.SL)
-			.put(BinaryOperator.SHIFT_RIGHT, JCTree.SR)
-			.put(BinaryOperator.BITWISE_SHIFT_RIGHT, JCTree.USR)
-			.put(BinaryOperator.PLUS, JCTree.PLUS)
-			.put(BinaryOperator.MINUS, JCTree.MINUS)
-			.put(BinaryOperator.MULTIPLY, JCTree.MUL)
-			.put(BinaryOperator.DIVIDE, JCTree.DIV)
-			.put(BinaryOperator.REMAINDER, JCTree.MOD)
-			.build();
+	static {
+		UNARY_OPERATORS.put(UnaryOperator.BINARY_NOT, JCTree.COMPL);
+		UNARY_OPERATORS.put(UnaryOperator.LOGICAL_NOT, JCTree.NOT);
+		UNARY_OPERATORS.put(UnaryOperator.UNARY_PLUS, JCTree.POS);
+		UNARY_OPERATORS.put(UnaryOperator.PREFIX_INCREMENT, JCTree.PREINC);
+		UNARY_OPERATORS.put(UnaryOperator.UNARY_MINUS, JCTree.NEG);
+		UNARY_OPERATORS.put(UnaryOperator.PREFIX_DECREMENT, JCTree.PREDEC);
+		UNARY_OPERATORS.put(UnaryOperator.POSTFIX_INCREMENT, JCTree.POSTINC);
+		UNARY_OPERATORS.put(UnaryOperator.POSTFIX_DECREMENT, JCTree.POSTDEC);
+		
+		for (Map.Entry<UnaryOperator, Integer> entry : UNARY_OPERATORS.entrySet()) UNARY_OPERATORS_INVERSE.put(entry.getValue(), entry.getKey());
+	}
 	
-	static final BiMap<String, Integer> PRIMITIVES = ImmutableBiMap.<String, Integer>builder()
-			.put("byte", TypeTags.BYTE)
-			.put("char", TypeTags.CHAR)
-			.put("short", TypeTags.SHORT)
-			.put("int", TypeTags.INT)
-			.put("long", TypeTags.LONG)
-			.put("float", TypeTags.FLOAT)
-			.put("double", TypeTags.DOUBLE)
-			.put("boolean", TypeTags.BOOLEAN)
-			.put("void", TypeTags.VOID)
-			.build();
+	static UnaryOperator getUnaryOperatorByTag(int tag) {
+		return UNARY_OPERATORS_INVERSE.get(tag);
+	}
+	
+	private static final Map<BinaryOperator, Integer> BINARY_OPERATORS = new EnumMap<BinaryOperator, Integer>(BinaryOperator.class);
+	private static final Map<Integer, BinaryOperator> BINARY_OPERATORS_INVERSE = new LinkedHashMap<Integer, BinaryOperator>();
+	
+	static {
+		BINARY_OPERATORS.put(BinaryOperator.PLUS_ASSIGN, JCTree.PLUS_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.MINUS_ASSIGN, JCTree.MINUS_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.MULTIPLY_ASSIGN, JCTree.MUL_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.DIVIDE_ASSIGN, JCTree.DIV_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.REMAINDER_ASSIGN, JCTree.MOD_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.AND_ASSIGN, JCTree.BITAND_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.XOR_ASSIGN, JCTree.BITXOR_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.OR_ASSIGN, JCTree.BITOR_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.SHIFT_LEFT_ASSIGN, JCTree.SL_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.SHIFT_RIGHT_ASSIGN, JCTree.SR_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.BITWISE_SHIFT_RIGHT_ASSIGN, JCTree.USR_ASG);
+		BINARY_OPERATORS.put(BinaryOperator.LOGICAL_OR, JCTree.OR);
+		BINARY_OPERATORS.put(BinaryOperator.LOGICAL_AND, JCTree.AND);
+		BINARY_OPERATORS.put(BinaryOperator.BITWISE_OR, JCTree.BITOR);
+		BINARY_OPERATORS.put(BinaryOperator.BITWISE_XOR, JCTree.BITXOR);
+		BINARY_OPERATORS.put(BinaryOperator.BITWISE_AND, JCTree.BITAND);
+		BINARY_OPERATORS.put(BinaryOperator.EQUALS, JCTree.EQ);
+		BINARY_OPERATORS.put(BinaryOperator.NOT_EQUALS, JCTree.NE);
+		BINARY_OPERATORS.put(BinaryOperator.GREATER, JCTree.GT);
+		BINARY_OPERATORS.put(BinaryOperator.GREATER_OR_EQUAL, JCTree.GE);
+		BINARY_OPERATORS.put(BinaryOperator.LESS, JCTree.LT);
+		BINARY_OPERATORS.put(BinaryOperator.LESS_OR_EQUAL, JCTree.LE);
+		BINARY_OPERATORS.put(BinaryOperator.SHIFT_LEFT, JCTree.SL);
+		BINARY_OPERATORS.put(BinaryOperator.SHIFT_RIGHT, JCTree.SR);
+		BINARY_OPERATORS.put(BinaryOperator.BITWISE_SHIFT_RIGHT, JCTree.USR);
+		BINARY_OPERATORS.put(BinaryOperator.PLUS, JCTree.PLUS);
+		BINARY_OPERATORS.put(BinaryOperator.MINUS, JCTree.MINUS);
+		BINARY_OPERATORS.put(BinaryOperator.MULTIPLY, JCTree.MUL);
+		BINARY_OPERATORS.put(BinaryOperator.DIVIDE, JCTree.DIV);
+		BINARY_OPERATORS.put(BinaryOperator.REMAINDER, JCTree.MOD);
+		
+		for (Map.Entry<BinaryOperator, Integer> entry : BINARY_OPERATORS.entrySet()) BINARY_OPERATORS_INVERSE.put(entry.getValue(), entry.getKey());
+	}
+	
+	static BinaryOperator getBinaryOperatorByTag(int tag) {
+		return BINARY_OPERATORS_INVERSE.get(tag);
+	}
+	
+	private static final Map<String, Integer> PRIMITIVES = new LinkedHashMap<String, Integer>();
+	private static final Map<Integer, String> PRIMITIVES_INVERSE = new LinkedHashMap<Integer, String>();
+	
+	static {
+		PRIMITIVES.put("byte", TypeTags.BYTE);
+		PRIMITIVES.put("char", TypeTags.CHAR);
+		PRIMITIVES.put("short", TypeTags.SHORT);
+		PRIMITIVES.put("int", TypeTags.INT);
+		PRIMITIVES.put("long", TypeTags.LONG);
+		PRIMITIVES.put("float", TypeTags.FLOAT);
+		PRIMITIVES.put("double", TypeTags.DOUBLE);
+		PRIMITIVES.put("boolean", TypeTags.BOOLEAN);
+		PRIMITIVES.put("void", TypeTags.VOID);
+		
+		for (Map.Entry<String, Integer> entry : PRIMITIVES.entrySet()) PRIMITIVES_INVERSE.put(entry.getValue(), entry.getKey());
+	}
+	
+	static String getPrimitiveByTag(int tag) {
+		return PRIMITIVES_INVERSE.get(tag);
+	}
 	
 	static int primitiveTypeTag(String typeName) {
 		Integer primitive = PRIMITIVES.get(typeName);
@@ -1475,7 +1499,7 @@ public class JcTreeBuilder {
 		int start = node.getPosition().getStart();
 		
 		if (sourceStructures != null && sourceStructures.containsKey(node)) {
-			for (SourceStructure struct : sourceStructures.get(node)) {
+			for (StructuralElement struct : sourceStructures.get(node)) {
 				if (structure.equals(struct.getContent())) {
 					start = atStart ? struct.getPosition().getStart() : struct.getPosition().getEnd();
 					if (idx-- <= 0) break;

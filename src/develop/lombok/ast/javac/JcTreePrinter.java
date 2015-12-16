@@ -25,11 +25,11 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.Map;
 
 import lombok.ast.StringLiteral;
 
-import com.google.common.collect.MapMaker;
 import com.sun.tools.javac.code.BoundKind;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.TypeTags;
@@ -101,7 +101,7 @@ public class JcTreePrinter {
 	private String rel;
 	private Map<JCTree, Integer> endPosTable;
 	private boolean modsOfEnum;
-	private final Map<Object, Integer> visited = new MapMaker().weakKeys().makeMap();
+	private Map<Object, Integer> visited;
 	private int objectCounter = 0;
 	
 	private static final Method GET_TAG_METHOD;
@@ -337,7 +337,10 @@ public class JcTreePrinter {
 	}
 	
 	public void visit(JCTree tree) {
+		visited = new HashMap<Object, Integer>();
 		tree.accept(visitor);
+		visited = null;
+		endPosTable = null;
 	}
 	
 	private final JCTree.Visitor visitor = new JCTree.Visitor() {

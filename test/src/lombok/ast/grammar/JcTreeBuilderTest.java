@@ -89,7 +89,7 @@ public class JcTreeBuilderTest extends TreeBuilderRunner<JCTree> {
 			throw new RuntimeException("Neither com.sun.tools.javac.util.JavacFileManager nor com.sun.tools.javac.util.DefaultFileManager could be configured", failTrace);
 		}
 		
-		JcTreeBuilder builder = new JcTreeBuilder(source, context);
+		JcTreeBuilder builder = new JcTreeBuilder(source.getSourceStructures(), context);
 		builder.visit(nodes.get(0));
 		return builder.get();
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2011 The Project Lombok Authors.
+ * Copyright (C) 2010-2015 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
@@ -118,9 +120,6 @@ import lombok.ast.While;
 import lombok.ast.WildcardKind;
 import lombok.javac.CommentInfo;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCAnnotation;
@@ -222,7 +221,7 @@ public class JcTreeConverter {
 	
 	public JcTreeConverter(Map<JCTree, Integer> endPosTable, Map<FlagKey, Object> params) {
 		this.endPosTable = endPosTable;
-		this.params = params == null ? ImmutableMap.<FlagKey, Object>of() : params;
+		this.params = params == null ? Collections.<FlagKey, Object>emptyMap() : params;
 	}
 	
 	private boolean hasFlag(FlagKey key) {
@@ -252,13 +251,13 @@ public class JcTreeConverter {
 		
 		if (value != null && value.getPosition().isUnplaced()) setPos(node, value);
 		
-		java.util.List<Node> result = Lists.newArrayList();
+		java.util.List<Node> result = new ArrayList<Node>();
 		if (value != null) result.add(value);
 		this.result = result;
 	}
 	
 	private Node toTree(JCTree node, FlagKey... keys) {
-		Map<FlagKey, Object> map = Maps.newEnumMap(FlagKey.class);
+		Map<FlagKey, Object> map = new EnumMap<FlagKey, Object>(FlagKey.class);
 		for (FlagKey key : keys) map.put(key, key);
 		return toTree(node, map);
 	}
@@ -282,7 +281,7 @@ public class JcTreeConverter {
 	}
 	
 	private Node toVariableDefinition(java.util.List<JCVariableDecl> decls, FlagKey... keys) {
-		Map<FlagKey, Object> map = Maps.newEnumMap(FlagKey.class);
+		Map<FlagKey, Object> map = new EnumMap<FlagKey, Object>(FlagKey.class);
 		for (FlagKey key : keys) map.put(key, key);
 		return toVariableDefinition(decls, map);
 	}
@@ -369,7 +368,7 @@ public class JcTreeConverter {
 	}
 	
 	private void fillList(java.util.List<? extends JCTree> nodes, RawListAccessor<?, ?> list, FlagKey... keys) {
-		Map<FlagKey, Object> map = Maps.newEnumMap(FlagKey.class);
+		Map<FlagKey, Object> map = new EnumMap<FlagKey, Object>(FlagKey.class);
 		for (FlagKey key : keys) map.put(key, key);
 		fillList(nodes, list, map);
 	}
@@ -603,7 +602,7 @@ public class JcTreeConverter {
 			long flags = node.mods.flags;
 			String name = node.getSimpleName().toString();
 			TypeDeclaration typeDecl;
-			Map<FlagKey, Object> flagKeyMap = Maps.newHashMap();
+			Map<FlagKey, Object> flagKeyMap = new HashMap<FlagKey, Object>();
 			flagKeyMap.put(FlagKey.CONTAINING_TYPE_NAME, name);
 			flagKeyMap.put(FlagKey.BLOCKS_ARE_INITIALIZERS, FlagKey.BLOCKS_ARE_INITIALIZERS);
 			flagKeyMap.put(FlagKey.SKIP_IS_DECL, FlagKey.SKIP_IS_DECL);
@@ -724,7 +723,7 @@ public class JcTreeConverter {
 		}
 		
 		@Override public void visitTypeIdent(JCPrimitiveTypeTree node) {
-			String primitiveType = JcTreeBuilder.PRIMITIVES.inverse().get(node.typetag);
+			String primitiveType = JcTreeBuilder.getPrimitiveByTag(node.typetag);
 			
 			if (primitiveType == null) throw new IllegalArgumentException("Uknown primitive type tag: " + node.typetag);
 			
@@ -927,7 +926,7 @@ public class JcTreeConverter {
 		@Override public void visitUnary(JCUnary node) {
 			UnaryExpression expr = new UnaryExpression();
 			expr.rawOperand(toTree(node.getExpression()));
-			expr.astOperator(JcTreeBuilder.UNARY_OPERATORS.inverse().get(getTag(node)));
+			expr.astOperator(JcTreeBuilder.getUnaryOperatorByTag(getTag(node)));
 			set(node, expr);
 		}
 		
@@ -935,7 +934,7 @@ public class JcTreeConverter {
 			BinaryExpression expr = new BinaryExpression();
 			expr.rawLeft(toTree(node.getLeftOperand()));
 			expr.rawRight(toTree(node.getRightOperand()));
-			expr.astOperator(JcTreeBuilder.BINARY_OPERATORS.inverse().get(getTag(node)));
+			expr.astOperator(JcTreeBuilder.getBinaryOperatorByTag(getTag(node)));
 			set(node, expr);
 		}
 		
@@ -981,7 +980,7 @@ public class JcTreeConverter {
 			BinaryExpression expr = new BinaryExpression();
 			expr.rawRight(toTree(node.getExpression()));
 			expr.rawLeft(toTree(node.getVariable()));
-			expr.astOperator(JcTreeBuilder.BINARY_OPERATORS.inverse().get(getTag(node)));
+			expr.astOperator(JcTreeBuilder.getBinaryOperatorByTag(getTag(node)));
 			set(node, expr);
 		}
 		
@@ -1058,7 +1057,7 @@ public class JcTreeConverter {
 			
 			ArrayCreation crea = new ArrayCreation();
 			JCTree type = node.getType();
-			java.util.List<Position> inits = Lists.newArrayList();
+			java.util.List<Position> inits = new ArrayList<Position>();
 			while (type instanceof JCArrayTypeTree) {
 				inits.add(getPosition(type));
 				type = ((JCArrayTypeTree) type).getType();

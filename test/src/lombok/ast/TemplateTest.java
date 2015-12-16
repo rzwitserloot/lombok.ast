@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 
 import java.util.Arrays;
 
+import lombok.ast.grammar.Template;
 import lombok.ast.printer.SourcePrinter;
 import lombok.ast.printer.StructureFormatter;
 

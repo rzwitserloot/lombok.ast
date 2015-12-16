@@ -85,7 +85,7 @@ public class EcjTreeBuilderTest extends TreeBuilderRunner<ASTNode> {
 		List<Node> nodes = source.getNodes();
 		assertEquals(1, nodes.size());
 		
-		EcjTreeBuilder builder = new EcjTreeBuilder(source, ecjCompilerOptions());
+		EcjTreeBuilder builder = new EcjTreeBuilder(source.getRawInput(), source.getSourceStructures(), source.getName(), ecjCompilerOptions());
 		
 		builder.visit(nodes.get(0));
 		return builder.get();

@@ -19,18 +19,23 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package lombok.ast.grammar;
+package lombok.ast;
 
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.NonNull;
-import lombok.Setter;
-import lombok.ast.Position;
-import lombok.ast.StructuralElement;
-
-@Data
-public final class SourceStructure implements StructuralElement {
-	@Setter(AccessLevel.PACKAGE)
-	@NonNull private Position position;
-	@NonNull private final String content;
+public interface RawListAccessor<T extends Node, P extends Node> extends Iterable<Node> {
+	P up();
+	Node owner();
+	void clear();
+	boolean isEmpty();
+	int size();
+	Node first();
+	Node last();
+	boolean contains(Node source);
+	P migrateAllFrom(RawListAccessor<?, ?> otherList);
+	P addToStart(Node node);
+	P addToEnd(Node node);
+	P addBefore(Node ref, Node node);
+	P addAfter(Node ref, Node node);
+	boolean replace(Node source, Node replacement);
+	boolean remove(Node source);
+	StrictListAccessor<T, P> asStrictAccessor();
 }
