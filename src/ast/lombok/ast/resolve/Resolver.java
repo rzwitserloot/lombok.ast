@@ -46,6 +46,7 @@ import lombok.ast.Select;
 import lombok.ast.TypeBody;
 import lombok.ast.TypeDeclaration;
 import lombok.ast.TypeReference;
+import lombok.ast.VariableReference;
 
 /**
  * Contains simplistic (guesstimations) resolution that doesn't require full resolution and symbol lookup but it isn't perfect.
@@ -355,11 +356,14 @@ public class Resolver {
 				s = (Select) parent;
 			} else if (parent instanceof Identifier) {
 				s = null;
-				list.add(((Identifier)parent).astValue());
+				list.add(((Identifier) parent).astValue());
+			} else if (parent instanceof VariableReference) { // in a.b, a could be an identifier or a variable reference.
+				s = null;
+				list.add(((VariableReference) parent).astIdentifier().astValue());
 			} else if (parent == null) {
 				break;
 			} else {
-				throw new ResolutionException(parent, "Identifier expected here, not a " + parent.getClass().getSimpleName());
+				throw new ResolutionException(parent, "Identifier expected here, not a " + parent.getClass().getSimpleName() + ": " + parent.toString());
 			}
 		}
 		

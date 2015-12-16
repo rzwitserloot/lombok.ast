@@ -23,8 +23,12 @@ package lombok.ast.resolve;
 
 import static org.junit.Assert.*;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Target;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import lombok.ast.Annotation;
+import lombok.ast.AnnotationDeclaration;
 import lombok.ast.ForwardingAstVisitor;
 import lombok.ast.MethodDeclaration;
 import lombok.ast.VariableDefinitionEntry;
@@ -194,5 +198,28 @@ public class TypesMatchTest {
 			}
 		});
 		assertEquals("expected 1 hit on MethodDeclaration", 1, hit.get());
+	}
+	
+	private static final String ANNOTATION_SOURCE =
+			"import java.lang.annotation.*;\n" +
+			"@Target(ElementType.ANNOTATION_TYPE)" +
+			"public @interface SomeAnnotation {\n" +
+			"}";
+	
+	@Test
+	public void testToAnnotationInstance() {
+		Source s = new Source(ANNOTATION_SOURCE, "SomeAnnotation.java");
+		s.parseCompilationUnit();
+		final AtomicInteger hit = new AtomicInteger();
+		s.getNodes().get(0).accept(new ForwardingAstVisitor() {
+			@Override public boolean visitAnnotationDeclaration(AnnotationDeclaration node) {
+				Annotation annotation = node.astModifiers().astAnnotations().first();
+				Target target = new Resolver().toAnnotationInstance(Target.class, annotation);
+				assertArrayEquals(new ElementType[] {ElementType.ANNOTATION_TYPE}, target.value());
+				hit.incrementAndGet();
+				return true;
+			}
+		});
+		assertEquals("expected 1 hit on AnnotationDeclaration", 1, hit.get());
 	}
 }

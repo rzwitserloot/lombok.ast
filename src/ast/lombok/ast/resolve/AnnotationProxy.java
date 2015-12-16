@@ -60,11 +60,12 @@ class AnnotationProxy implements InvocationHandler {
 		throw new ResolutionException(val, "Expected string literal");
 	}
 	
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({"unchecked", "rawtypes"})
 	private boolean tryAsEnum(Node val, Class<?> expectedType, List<Object> returnValues) {
 		if (!expectedType.isEnum()) return false;
 		
-		returnValues.add(this.resolver.resolveEnum(expectedType.asSubclass(Enum.class), val));
+		Class<? extends Enum> enumType = expectedType.asSubclass(Enum.class);
+		returnValues.add(this.resolver.resolveEnum(enumType, val));
 		return true;
 	}
 	
